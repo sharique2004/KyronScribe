@@ -16,7 +16,7 @@ Built for the Kyron Medical technical interview — requirements in [docs/CHALLE
 | Streaming SOAP via SSE, progressive render | `POST /api/generate` (SSE) → tag-parsing incremental render, section by section, token by token — `server/src/routes/generate.ts`, `client/src/api/generateStream.ts` | Done |
 | ≥1 semantically matched ICD-10 code in Assessment | Model emits `<CODES>` from clinical content; provider verifies/edits | Done |
 | Inline edit before save; persist to DB | Editable section cards → `POST /api/encounters` transaction | Done |
-| Patient history via backend tool call (not frontend prompt-stuffing) | Anthropic tool use: model calls `get_patient_history`, server runs the DB query mid-stream and returns a `tool_result` — `server/src/services/ai/scribe.ts` | Done |
+| Patient history via backend tool call (not frontend prompt-stuffing) | Model tool use (Gemini function calling / Anthropic tool use): model calls `get_patient_history`, server runs the DB query mid-stream and returns the result — `server/src/services/ai/gemini.ts`, `scribe.ts` | Done |
 | Returning vs. first-time patient behave differently | Tool only offered when the patient exists; system prompt states "first visit" otherwise; UI transparency panel shows exactly which encounters were consulted | Done |
 | Immutable versioning with author + time | Append-only `note_versions`, `UNIQUE(note_id, version_no)`, race-safe max+1 with retry — never UPDATE/DELETE | Done |
 | ICD-10 search widget, 200–300+ codes, no external API | 320 ICD-10-CM codes embedded with local MiniLM (all-MiniLM-L6-v2), cosine similarity in-process, click-to-append — `server/src/services/embeddings.ts` | Done |
@@ -50,8 +50,9 @@ nginx  (EC2 · TLS via Let's Encrypt · serves client/dist · proxies /api,
 Node 20 · Express 4 + TypeScript  (systemd unit, non-root)
    ├── pg.Pool (max 10) ───────────────► AWS RDS PostgreSQL
    │                                     (private subnets; SG allows the EC2 SG only)
-   ├── @anthropic-ai/sdk ─ streaming + tool use ─► Anthropic API (claude-sonnet-5)
+   ├── @google/genai ─ streaming + function calling ─► Gemini API (gemini-3.6-flash)
    │      └─ get_patient_history tool → indexed DB query mid-generation
+   │      └─ provider-agnostic AI layer: Anthropic (@anthropic-ai/sdk) + mock fallbacks
    ├── @xenova/transformers ─ MiniLM embeddings, fully in-process
    └── AWS Secrets Manager ─ boot-time secret load via EC2 instance role
 ```
@@ -64,7 +65,7 @@ Node 20 · Express 4 + TypeScript  (systemd unit, non-root)
 | Database | PostgreSQL (RDS prod / Homebrew local) | Relational fit for versions, roles, audit; JSONB only where the payload is genuinely list-shaped and attached to an immutable row; same engine dev↔prod |
 | DB access | `pg` Pool + raw parameterized SQL | Pooling and schema are graded — no ORM hiding the queries. One pool per process, max 10 |
 | Auth | JWT HS256 in an httpOnly SameSite=Lax cookie, bcrypt(12) | Stateless verify, no token in JS-readable storage; the per-request `is_active` lookup makes deactivation instant (scenario N3) |
-| AI | `claude-sonnet-5` (env-overridable) | Interactive streaming product → first-token latency and tokens/sec dominate perceived quality; native tool-use streaming powers history injection |
+| AI | `gemini-3.6-flash` (env-overridable) | Interactive streaming product → first-token latency and tokens/sec dominate perceived quality; native function-calling streaming powers history injection; generous AI Studio free tier. Provider-agnostic layer: Anthropic (`claude-sonnet-5`) and mock are drop-in fallbacks |
 | ICD search | Local MiniLM (384-dim) + cosine in Node | Semantic, deterministic, zero per-keystroke cost; at 320 codes an index is overkill. ILIKE fallback if the model can't load |
 | Frontend | React 18 + Vite + Tailwind 3.4 | Fast, typed, static build served by nginx — no SSR runtime to babysit |
 | Streaming | SSE over `fetch` + ReadableStream (POST) | One-way stream fits generation exactly; survives proxies; simpler to secure than WebSockets |
@@ -110,12 +111,14 @@ Seeded returning patient: **Margaret Chen, DOB 1955-03-12** — two completed pr
 | `JWT_SECRET` | yes | HS256 signing secret |
 | `JWT_TTL_HOURS` | no (12) | Session lifetime |
 | `PORT` | no (4000) | API port (bound to 127.0.0.1 behind nginx in prod) |
-| `ANTHROPIC_API_KEY` | no | Real generation; leave blank for mock mode |
-| `SCRIBE_MODEL` | no (`claude-sonnet-5`) | Generation model |
+| `GEMINI_API_KEY` | no | Real generation via Gemini (free at [aistudio.google.com/apikey](https://aistudio.google.com/apikey)); leave blank for mock mode |
+| `ANTHROPIC_API_KEY` | no | Real generation via Anthropic (fallback provider) |
+| `AI_PROVIDER` | no (auto) | Force `gemini` \| `anthropic` \| `mock`; default prefers gemini, then anthropic, then mock based on which keys exist |
+| `SCRIBE_MODEL` | no (per provider) | Generation model — defaults `gemini-3.6-flash` (gemini) / `claude-sonnet-5` (anthropic) |
 | `SCRIBE_MOCK` | no | `1` forces mock streaming (auto-on when no API key) |
 | `AWS_SECRETS_NAME` | prod only | Secrets Manager secret; values override env at boot |
 
-**Mock vs. real AI:** with no `ANTHROPIC_API_KEY` (or `SCRIBE_MOCK=1`) the server streams a realistic canned generation through the *same* SSE path — template-aware, transcript-aware, red flags, simulated history tool call, `<INSUFFICIENT>` behavior. Set a real key and `SCRIBE_MOCK=0` (or remove it) to switch to live Anthropic generation; nothing else changes.
+**Mock vs. real AI:** with no API key (or `SCRIBE_MOCK=1`) the server streams a realistic canned generation through the *same* SSE path — template-aware, transcript-aware, red flags, simulated history tool call, `<INSUFFICIENT>` behavior. Set `GEMINI_API_KEY` (or `ANTHROPIC_API_KEY`) and `SCRIBE_MOCK=0` (or remove it) to switch to live generation; nothing else changes. The AI layer is provider-agnostic: Gemini Flash is the default (streaming latency, native function calling, generous free tier), with Anthropic and mock as drop-in fallbacks — all three emit the identical SSE event contract.
 
 ---
 

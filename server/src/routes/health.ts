@@ -1,7 +1,7 @@
 // Health check (PRD §5) for nginx / systemd. Pings the pool with a 1s timeout.
 import { Router, type Request, type Response } from 'express';
 import { getPool } from '../db.js';
-import { getConfig } from '../config.js';
+import { getConfig, effectiveProvider } from '../config.js';
 
 const router = Router();
 
@@ -28,17 +28,20 @@ router.get('/', async (_req: Request, res: Response) => {
     db = false;
   }
   // `mock` tells the UI whether generation runs in mock mode (no key / SCRIBE_MOCK) so it can
-  // show the mock chip (PRD §2.2 P5). Read defensively — never let config break the health probe.
+  // show the mock chip (PRD §2.2 P5); `provider` is the effective AI provider (additive field).
+  // Read defensively — never let config break the health probe.
   let mock = false;
+  let provider: ReturnType<typeof effectiveProvider> = 'mock';
   try {
-    const cfg = getConfig();
-    mock = cfg.scribeMock || !cfg.anthropicApiKey;
+    provider = effectiveProvider(getConfig());
+    mock = provider === 'mock';
   } catch {
     mock = false;
+    provider = 'mock';
   }
   // 503 when the DB ping fails so deploy gates / monitors detect an outage; the
   // body is kept identical in both cases for the UI's mock-mode chip.
-  res.status(db ? 200 : 503).json({ ok: db, db, mock });
+  res.status(db ? 200 : 503).json({ ok: db, db, mock, provider });
 });
 
 export default router;

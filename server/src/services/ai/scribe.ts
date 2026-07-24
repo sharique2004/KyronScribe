@@ -85,7 +85,9 @@ export async function fetchPatientHistory(patientId: string): Promise<HistoryEnt
       .map((c) => (c && typeof c === 'object' ? String((c as Record<string, unknown>).code ?? '') : ''))
       .filter(Boolean);
     return {
-      date: r.created_at,
+      // pg returns timestamptz columns as JS Date objects despite the row typing —
+      // normalize to an ISO string so downstream .slice()/JSON paths are safe.
+      date: new Date(r.created_at).toISOString(),
       provider: r.provider_name,
       codes,
       subjective: truncate(r.subjective ?? ''),
@@ -105,8 +107,8 @@ function safeJsonArray(s: string): unknown[] {
   }
 }
 
-/** Render history rows into the plain-text tool_result the model consumes. */
-function formatHistoryForModel(entries: HistoryEntry[]): string {
+/** Render history rows into the plain-text tool result the model consumes (shared by all providers). */
+export function formatHistoryForModel(entries: HistoryEntry[]): string {
   if (entries.length === 0) return 'No prior encounters found for this patient.';
   return entries
     .map((e, i) => {

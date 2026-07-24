@@ -18,7 +18,7 @@ Setup before recording: both servers running (`server: npm run dev`, `client: np
 2. Keep template **General SOAP**. Paste a BP-follow-up transcript (e.g. "Margaret returns for her blood pressure follow-up. Taking lisinopril 10 mg daily. Home readings ~132/80. Denies chest pain, headache, dizziness. BP today 130/78, HR 72. Continue current regimen, recheck in 3 months with BMP.").
 3. Click **Generate note**. Narrate what's on screen, in order:
    - status line **"Reviewing 2 prior encounters…"** — **"the model just called the `get_patient_history` tool; the server ran one indexed DB query mid-stream and returned prior notes as a tool result. History never touches the frontend prompt."**
-   - sections filling **token by token** — **"progressive SSE render, not spinner-then-dump."**
+   - sections filling **token by token** — **"progressive SSE render, not spinner-then-dump. Live generation runs on Gemini Flash — chosen for streaming latency, native function calling, and a generous free tier — behind a provider-agnostic AI layer with Anthropic and mock as drop-in fallbacks."**
    - after completion, the **Context used** panel lists exactly the two prior encounters the AI consulted — **"differential behavior you can see: a first-time patient shows 'generated without prior history' here instead."**
    - the Subjective references prior diagnoses (E11.9) — history integration, clinically appropriate.
 4. **Edit inline** — click into Subjective, tweak a sentence.

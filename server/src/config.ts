@@ -3,15 +3,33 @@
 // `loadConfig()` is called exactly once at boot (index.ts / scripts) before anything reads config.
 import { config as loadDotenv } from 'dotenv';
 
+/** Supported AI providers for note generation. */
+export type AiProvider = 'gemini' | 'anthropic' | 'mock';
+
 export interface AppConfig {
   databaseUrl: string;
   jwtSecret: string;
   jwtTtlHours: number;
   port: number;
   anthropicApiKey?: string;
+  geminiApiKey?: string;
+  /** Configured provider (explicit AI_PROVIDER, else inferred from which keys exist). */
+  aiProvider: AiProvider;
   scribeModel: string;
   scribeMock: boolean;
   nodeEnv: string;
+}
+
+/**
+ * The provider a generation request will ACTUALLY use: SCRIBE_MOCK forces mock, and a
+ * configured provider without its API key degrades to mock (never a hard failure).
+ * Shared by the generate route (runner choice + audit meta) and the health payload.
+ */
+export function effectiveProvider(cfg: AppConfig): AiProvider {
+  if (cfg.scribeMock) return 'mock';
+  if (cfg.aiProvider === 'gemini') return cfg.geminiApiKey ? 'gemini' : 'mock';
+  if (cfg.aiProvider === 'anthropic') return cfg.anthropicApiKey ? 'anthropic' : 'mock';
+  return 'mock';
 }
 
 let cached: AppConfig | null = null;
@@ -60,13 +78,32 @@ export async function loadConfig(): Promise<AppConfig> {
   const jwtSecret = source.JWT_SECRET;
   if (!jwtSecret) throw new Error('JWT_SECRET is required');
 
+  const anthropicApiKey = source.ANTHROPIC_API_KEY || undefined;
+  const geminiApiKey = source.GEMINI_API_KEY || undefined;
+
+  // Provider resolution: explicit AI_PROVIDER wins; otherwise infer from which keys
+  // are present (Gemini preferred), falling back to mock when no key is configured.
+  const explicit = (source.AI_PROVIDER || '').toLowerCase();
+  let aiProvider: AiProvider;
+  if (explicit === 'gemini' || explicit === 'anthropic' || explicit === 'mock') {
+    aiProvider = explicit;
+  } else if (explicit) {
+    throw new Error(`AI_PROVIDER must be one of gemini|anthropic|mock, got "${explicit}"`);
+  } else {
+    aiProvider = geminiApiKey ? 'gemini' : anthropicApiKey ? 'anthropic' : 'mock';
+  }
+
   cached = {
     databaseUrl,
     jwtSecret,
     jwtTtlHours: toNumber(source.JWT_TTL_HOURS, 12),
     port: toNumber(source.PORT, 4000),
-    anthropicApiKey: source.ANTHROPIC_API_KEY || undefined,
-    scribeModel: source.SCRIBE_MODEL || 'claude-sonnet-5',
+    anthropicApiKey,
+    geminiApiKey,
+    aiProvider,
+    // Provider-aware default: Gemini Flash for gemini, Sonnet for anthropic/mock.
+    scribeModel:
+      source.SCRIBE_MODEL || (aiProvider === 'gemini' ? 'gemini-3.6-flash' : 'claude-sonnet-5'),
     scribeMock: toBool(source.SCRIBE_MOCK),
     nodeEnv: source.NODE_ENV || 'development',
   };

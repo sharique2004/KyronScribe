@@ -15,7 +15,7 @@ Everything maps to PRD §8 and the CHALLENGE.md *Infrastructure Requirements*.
 ```
 Browser ──HTTPS──► nginx (EC2 :80/:443, Let's Encrypt) ──► Node :127.0.0.1:4000 (systemd)
                                                               ├─ pg.Pool(max 10) ─► RDS (private)
-                                                              ├─ Anthropic API
+                                                              ├─ Gemini API (or Anthropic fallback)
                                                               └─ Secrets Manager (boot, instance role)
 ```
 
@@ -156,20 +156,23 @@ Browse to `https://scribe.example.com` — green padlock, no warning.
 
 ---
 
-## 5. Put the real Anthropic API key into Secrets Manager
+## 5. Put the real AI provider key(s) into Secrets Manager
 
-Terraform seeded the secret with `ANTHROPIC_API_KEY = "REPLACE_ME"` and set
-`lifecycle { ignore_changes = [secret_string] }`, so a later `terraform apply` will **not**
-overwrite your real key. Update the value out-of-band, preserving the other two fields:
+Terraform seeded the secret with `GEMINI_API_KEY = "REPLACE_ME"` and
+`ANTHROPIC_API_KEY = "REPLACE_ME"` and set `lifecycle { ignore_changes = [secret_string] }`,
+so a later `terraform apply` will **not** overwrite your real keys. Gemini is the primary
+provider — set `GEMINI_API_KEY`; `ANTHROPIC_API_KEY` is an optional fallback (the server
+prefers gemini, then anthropic, then mock; `AI_PROVIDER` forces a choice). Update the
+values out-of-band, preserving the other fields:
 
 ```bash
-# Fetch current values, splice in the real key, write a new version.
+# Fetch current values, splice in the real key(s), write a new version.
 CURRENT=$(aws secretsmanager get-secret-value \
   --secret-id kyron-scribe/prod --region us-east-2 \
   --query SecretString --output text)
 
 UPDATED=$(echo "$CURRENT" | python3 -c \
-  'import json,sys; d=json.load(sys.stdin); d["ANTHROPIC_API_KEY"]="sk-ant-REPLACE_WITH_REAL_KEY"; print(json.dumps(d))')
+  'import json,sys; d=json.load(sys.stdin); d["GEMINI_API_KEY"]="AIza_REPLACE_WITH_REAL_KEY"; d["ANTHROPIC_API_KEY"]="sk-ant-OPTIONAL_FALLBACK_KEY"; print(json.dumps(d))')
 
 aws secretsmanager put-secret-value \
   --secret-id kyron-scribe/prod --region us-east-2 \

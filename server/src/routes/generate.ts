@@ -5,12 +5,13 @@
 // set or no API key is configured, and exercises the identical SSE path.
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { z } from 'zod';
-import { getConfig } from '../config.js';
+import { getConfig, effectiveProvider, type AiProvider } from '../config.js';
 import { query } from '../db.js';
 import { requireAuth, requireProvider } from '../middleware/auth.js';
 import { audit } from '../services/audit.js';
 import type { AuthedRequest } from '../types.js';
 import { runGeneration, type GenerationOpts, type ScribeEvent } from '../services/ai/scribe.js';
+import { runGeminiGeneration } from '../services/ai/gemini.js';
 import { runMockGeneration } from '../services/ai/mock.js';
 
 const router = Router();
@@ -34,6 +35,7 @@ router.post(
 
     // ── Pre-stream setup (errors here render the normal JSON envelope) ──
     let opts: GenerationOpts;
+    let provider: AiProvider;
     let mock: boolean;
     let templateId: string | null;
     let patientId: string | null;
@@ -74,7 +76,9 @@ router.post(
         isReturning = Number(cRows[0]?.n ?? '0') > 0;
       }
 
-      mock = cfg.scribeMock || !cfg.anthropicApiKey;
+      // Provider the request will actually use (SCRIBE_MOCK / missing keys degrade to mock).
+      provider = effectiveProvider(cfg);
+      mock = provider === 'mock';
 
       opts = {
         patient: body.patient,
@@ -119,11 +123,13 @@ router.post(
       controller.abort();
     });
 
-    audit(user.id, 'generate', 'patient', patientId, { patientId, templateId, mock });
+    audit(user.id, 'generate', 'patient', patientId, { patientId, templateId, mock, provider });
 
     try {
       if (mock) {
         await runMockGeneration(opts, emit);
+      } else if (provider === 'gemini') {
+        await runGeminiGeneration(opts, emit);
       } else {
         await runGeneration(opts, emit);
       }

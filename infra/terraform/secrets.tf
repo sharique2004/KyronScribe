@@ -1,10 +1,11 @@
 # secrets.tf — AWS Secrets Manager (PRD §8, §3).
-#   Secret "kyron-scribe/prod" holds the three runtime secrets the server reads at boot:
+#   Secret "kyron-scribe/prod" holds the runtime secrets the server reads at boot:
 #     DATABASE_URL       — composed from the RDS endpoint + generated app password
 #     JWT_SECRET         — 48-byte random signing key (generated here, never in the repo)
-#     ANTHROPIC_API_KEY  — placeholder "REPLACE_ME"; the real key is put in manually
+#     GEMINI_API_KEY     — placeholder "REPLACE_ME"; the real key is put in manually
+#     ANTHROPIC_API_KEY  — placeholder "REPLACE_ME"; optional fallback provider key
 #                          (see docs/DEPLOYMENT.md) and lifecycle.ignore_changes keeps a
-#                          later `terraform apply` from clobbering that manual value.
+#                          later `terraform apply` from clobbering those manual values.
 # The EC2 instance role (iam.tf) is granted GetSecretValue on THIS secret's ARN only.
 
 resource "random_password" "jwt_secret" {
@@ -47,14 +48,15 @@ resource "aws_secretsmanager_secret_version" "app" {
   secret_string = jsonencode({
     DATABASE_URL      = local.database_url
     JWT_SECRET        = random_password.jwt_secret.result
-    ANTHROPIC_API_KEY = "REPLACE_ME" # replaced out-of-band; see ignore_changes below
+    GEMINI_API_KEY    = "REPLACE_ME" # replaced out-of-band; see ignore_changes below
+    ANTHROPIC_API_KEY = "REPLACE_ME" # optional fallback provider; replaced out-of-band
   })
 
   lifecycle {
     # Once an operator runs `aws secretsmanager put-secret-value` to drop in the real
-    # Anthropic key (and any rotated values), Terraform must not revert the secret back
-    # to this template on the next apply. We intentionally stop managing the value's
-    # contents after creation.
+    # AI provider keys (and any rotated values), Terraform must not revert the secret
+    # back to this template on the next apply. We intentionally stop managing the
+    # value's contents after creation.
     ignore_changes = [secret_string]
   }
 }
