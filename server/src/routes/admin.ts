@@ -36,6 +36,8 @@ const encountersQuerySchema = z.object({
 interface AdminEncounterRow {
   id: string;
   created_at: Date;
+  occurred_on: string;
+  mrn: string;
   provider_id: string;
   provider_name: string;
   first_name: string;
@@ -60,18 +62,18 @@ router.get('/encounters', async (req: Request, res: Response, next: NextFunction
     }
     if (from) {
       params.push(from);
-      clauses.push(`e.created_at >= $${params.length}::date`);
+      clauses.push(`e.occurred_on >= $${params.length}::date`);
     }
     if (to) {
       params.push(to);
-      clauses.push(`e.created_at < ($${params.length}::date + interval '1 day')`);
+      clauses.push(`e.occurred_on <= $${params.length}::date`);
     }
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
 
     const { rows } = await query<AdminEncounterRow>(
-      `SELECT e.id, e.created_at,
+      `SELECT e.id, e.created_at, to_char(e.occurred_on,'YYYY-MM-DD') AS occurred_on,
               u.id AS provider_id, u.full_name AS provider_name,
-              p.first_name, p.last_name, to_char(p.dob,'YYYY-MM-DD') AS dob,
+              p.mrn, p.first_name, p.last_name, to_char(p.dob,'YYYY-MM-DD') AS dob,
               t.name AS template_name,
               (SELECT count(*)::int FROM note_versions nv
                  JOIN notes n2 ON n2.id = nv.note_id
@@ -91,15 +93,16 @@ router.get('/encounters', async (req: Request, res: Response, next: NextFunction
          LIMIT 1
        ) lv ON true
        ${where}
-       ORDER BY e.created_at DESC`,
+       ORDER BY e.occurred_on DESC, e.created_at DESC`,
       params,
     );
 
     const encounters = rows.map((r) => ({
       id: r.id,
       createdAt: r.created_at.toISOString(),
+      occurredOn: r.occurred_on,
       provider: { id: r.provider_id, fullName: r.provider_name },
-      patient: { firstName: r.first_name, lastName: r.last_name, dob: r.dob },
+      patient: { mrn: r.mrn, firstName: r.first_name, lastName: r.last_name, dob: r.dob },
       templateName: r.template_name,
       versionCount: r.version_count,
       latestVersion:

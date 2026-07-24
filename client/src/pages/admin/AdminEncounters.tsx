@@ -84,7 +84,7 @@ export function AdminEncounters() {
         key: 'date',
         header: 'Date',
         width: '120px',
-        render: (r) => <span className="tabular-nums text-muted">{formatDate(r.createdAt)}</span>,
+        render: (r) => <span className="tabular-nums text-muted">{formatDate(r.occurredOn ?? r.createdAt)}</span>,
       },
       {
         key: 'provider',

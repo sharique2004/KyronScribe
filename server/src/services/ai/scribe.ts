@@ -69,7 +69,7 @@ export async function fetchPatientHistory(patientId: string): Promise<HistoryEnt
     plan: string;
     icd_codes: unknown;
   }>(
-    `SELECT nv.created_at,
+    `SELECT COALESCE(e.occurred_on::timestamptz, nv.created_at) AS created_at,
             u.full_name AS provider_name,
             nv.subjective, nv.objective, nv.assessment, nv.plan, nv.icd_codes
      FROM note_versions nv
@@ -77,7 +77,7 @@ export async function fetchPatientHistory(patientId: string): Promise<HistoryEnt
      JOIN encounters e  ON e.id = n.encounter_id
      JOIN users u       ON u.id = e.provider_id
      WHERE e.patient_id = $1
-     ORDER BY nv.created_at DESC
+     ORDER BY e.occurred_on DESC, nv.created_at DESC
      LIMIT 5`,
     [patientId],
   );

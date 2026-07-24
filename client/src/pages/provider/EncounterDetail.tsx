@@ -211,10 +211,18 @@ export function EncounterDetail() {
           description={
             <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <span className="tabular-nums">DOB {formatDob(p.dob)}</span>
+              {p.mrn && (
+                <>
+                  <span className="text-line">|</span>
+                  <span className="tabular-nums font-medium text-primary">MRN {p.mrn}</span>
+                </>
+              )}
               <span className="text-line">|</span>
               <span>{providerLabel}</span>
               <span className="text-line">|</span>
-              <span className="tabular-nums">{formatDate(data.createdAt)}</span>
+              <span className="tabular-nums">
+                Encounter {formatDate(data.occurredOn ?? data.createdAt)}
+              </span>
               {data.templateName && (
                 <>
                   <span className="text-line">|</span>

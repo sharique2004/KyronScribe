@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
+import { DateInput } from '@/components/ui/DateInput';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { Modal } from '@/components/ui/Modal';
 import { Spinner } from '@/components/ui/Spinner';
@@ -48,6 +49,10 @@ export function Workspace() {
   const [first, setFirst] = useState('');
   const [last, setLast] = useState('');
   const [dob, setDob] = useState('');
+  // Explicitly linked patient entity (autocomplete selection). Any manual identity edit
+  // unlinks, so a typed change can never silently attach the note to the wrong chart.
+  const [linkedPatient, setLinkedPatient] = useState<{ id: string; mrn: string } | null>(null);
+  const [occurredOn, setOccurredOn] = useState(() => new Date().toISOString().slice(0, 10));
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [transcript, setTranscript] = useState('');
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -155,7 +160,12 @@ export function Workspace() {
     setShowContext(false);
 
     genRef.current = startGeneration(
-      { patient: { first: first.trim(), last: last.trim(), dob }, transcript, templateId },
+      {
+        patient: { first: first.trim(), last: last.trim(), dob },
+        ...(linkedPatient ? { patientId: linkedPatient.id } : {}),
+        transcript,
+        templateId,
+      },
       {
         onStatus: (m) => setStatusMessage(m),
         onHistory: (h) => {
@@ -191,7 +201,7 @@ export function Workspace() {
         },
       },
     );
-  }, [canGenerate, first, last, dob, transcript, templateId]);
+  }, [canGenerate, first, last, dob, transcript, templateId, linkedPatient]);
 
   // --- Inline edits. ---
   const handleEditSection = useCallback((key: SoapKey, value: string) => {
@@ -222,6 +232,8 @@ export function Workspace() {
       const res = await runWithAuthRetry(() =>
         api.post<{ encounterId: string; noteId: string; versionNo: number }>('/encounters', {
           patient: { first: first.trim(), last: last.trim(), dob },
+          ...(linkedPatient ? { patientId: linkedPatient.id } : {}),
+          occurredOn,
           templateId,
           transcript,
           note: {
@@ -243,7 +255,7 @@ export function Workspace() {
       toast.error(message);
       setSaving(false);
     }
-  }, [canSave, runWithAuthRetry, first, last, dob, templateId, transcript, note, clearDraft, toast, navigate]);
+  }, [canSave, runWithAuthRetry, first, last, dob, linkedPatient, occurredOn, templateId, transcript, note, clearDraft, toast, navigate]);
 
   // --- Discard. ---
   const resetAll = useCallback(() => {
@@ -253,6 +265,8 @@ export function Workspace() {
     setFirst('');
     setLast('');
     setDob('');
+    setLinkedPatient(null);
+    setOccurredOn(new Date().toISOString().slice(0, 10));
     setTranscript('');
     setPhase('idle');
     setStatusMessage(null);
@@ -297,11 +311,38 @@ export function Workspace() {
                 first={first}
                 last={last}
                 dob={dob}
-                onFirst={setFirst}
-                onLast={setLast}
-                onDob={setDob}
+                onFirst={(v) => {
+                  setFirst(v);
+                  setLinkedPatient(null);
+                }}
+                onLast={(v) => {
+                  setLast(v);
+                  setLinkedPatient(null);
+                }}
+                onDob={(v) => {
+                  setDob(v);
+                  setLinkedPatient(null);
+                }}
+                linked={linkedPatient}
+                onLink={(p) => {
+                  setFirst(p.firstName);
+                  setLast(p.lastName);
+                  setDob(p.dob);
+                  setLinkedPatient({ id: p.id, mrn: p.mrn });
+                }}
+                onUnlink={() => setLinkedPatient(null)}
                 disabled={streaming}
               />
+
+              <div className="space-y-1">
+                <SectionLabel>Encounter date</SectionLabel>
+                <DateInput
+                  value={occurredOn}
+                  max="9999-12-31"
+                  onChange={(e) => setOccurredOn(e.target.value)}
+                  disabled={streaming}
+                />
+              </div>
 
               <div className="space-y-1">
                 <SectionLabel>Template</SectionLabel>

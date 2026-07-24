@@ -23,6 +23,8 @@ const bodySchema = z.object({
     last: z.string().trim().min(1, 'last name is required'),
     dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'dob must be YYYY-MM-DD'),
   }),
+  /** Explicitly linked patient entity (autocomplete); wins over the identity-triple lookup. */
+  patientId: z.string().uuid().optional(),
   transcript: z.string(),
   templateId: z.string().uuid().nullable().optional(),
 });
@@ -61,12 +63,21 @@ router.post(
         }
       }
 
-      // Patient lookup by identity triple → returning-vs-new is structural (F4).
-      const { rows: pRows } = await query<{ id: string }>(
-        'SELECT id FROM patients WHERE lower(first_name) = lower($1) AND lower(last_name) = lower($2) AND dob = $3',
-        [body.patient.first, body.patient.last, body.patient.dob],
-      );
-      patientId = pRows[0]?.id ?? null;
+      // Patient resolution → returning-vs-new is structural (F4). An explicitly linked
+      // entity (autocomplete selection) wins; otherwise fall back to the identity triple.
+      if (body.patientId) {
+        const { rows: pRows } = await query<{ id: string }>(
+          'SELECT id FROM patients WHERE id = $1',
+          [body.patientId],
+        );
+        patientId = pRows[0]?.id ?? null;
+      } else {
+        const { rows: pRows } = await query<{ id: string }>(
+          'SELECT id FROM patients WHERE lower(first_name) = lower($1) AND lower(last_name) = lower($2) AND dob = $3',
+          [body.patient.first, body.patient.last, body.patient.dob],
+        );
+        patientId = pRows[0]?.id ?? null;
+      }
 
       let isReturning = false;
       if (patientId) {

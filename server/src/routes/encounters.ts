@@ -42,6 +42,10 @@ const createEncounterSchema = z.object({
     last: z.string().trim().min(1),
     dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'dob must be YYYY-MM-DD'),
   }),
+  /** When the provider explicitly linked an existing patient from the autocomplete. */
+  patientId: z.string().uuid().optional(),
+  /** Clinical date of the visit (documentation may happen later). Defaults to today. */
+  occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'occurredOn must be YYYY-MM-DD').optional(),
   templateId: z.string().uuid().nullable().optional().default(null),
   transcript: z.string().min(1),
   note: noteContentSchema,
@@ -52,6 +56,8 @@ const createEncounterSchema = z.object({
 interface EncounterListRow {
   id: string;
   created_at: Date;
+  occurred_on: string;
+  mrn: string;
   patient_id: string;
   first_name: string;
   last_name: string;
@@ -66,6 +72,8 @@ interface EncounterListRow {
 interface EncounterHeadRow {
   id: string;
   created_at: Date;
+  occurred_on: string;
+  mrn: string;
   transcript: string;
   template_id: string | null;
   provider_id: string;
@@ -99,8 +107,8 @@ router.get('/', requireAuth, async (req: Request, res: Response, next: NextFunct
   try {
     const user = (req as AuthedRequest).user;
     const { rows } = await query<EncounterListRow>(
-      `SELECT e.id, e.created_at,
-              p.id AS patient_id, p.first_name, p.last_name, to_char(p.dob,'YYYY-MM-DD') AS dob,
+      `SELECT e.id, e.created_at, to_char(e.occurred_on,'YYYY-MM-DD') AS occurred_on,
+              p.id AS patient_id, p.mrn, p.first_name, p.last_name, to_char(p.dob,'YYYY-MM-DD') AS dob,
               t.name AS template_name,
               (SELECT count(*)::int FROM note_versions nv WHERE nv.note_id = n.id) AS version_count,
               lv.version_no  AS lv_version_no,
@@ -118,15 +126,17 @@ router.get('/', requireAuth, async (req: Request, res: Response, next: NextFunct
          LIMIT 1
        ) lv ON true
        WHERE e.provider_id = $1
-       ORDER BY e.created_at DESC`,
+       ORDER BY e.occurred_on DESC, e.created_at DESC`,
       [user.id],
     );
 
     const encounters = rows.map((r) => ({
       id: r.id,
       createdAt: r.created_at.toISOString(),
+      occurredOn: r.occurred_on,
       patient: {
         id: r.patient_id,
+        mrn: r.mrn,
         firstName: r.first_name,
         lastName: r.last_name,
         dob: r.dob,
@@ -159,10 +169,11 @@ router.get('/:id', requireAuth, async (req: Request, res: Response, next: NextFu
     }
 
     const { rows } = await query<EncounterHeadRow>(
-      `SELECT e.id, e.created_at, e.transcript, e.template_id, e.provider_id,
+      `SELECT e.id, e.created_at, to_char(e.occurred_on,'YYYY-MM-DD') AS occurred_on,
+              e.transcript, e.template_id, e.provider_id,
               t.name AS template_name,
               u.id AS provider_uid, u.full_name AS provider_name, u.credentials AS provider_creds,
-              p.id AS patient_id, p.first_name, p.last_name, to_char(p.dob,'YYYY-MM-DD') AS dob,
+              p.id AS patient_id, p.mrn, p.first_name, p.last_name, to_char(p.dob,'YYYY-MM-DD') AS dob,
               n.id AS note_id
        FROM encounters e
        JOIN users u ON u.id = e.provider_id
@@ -197,6 +208,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response, next: NextFu
       encounter: {
         id: head.id,
         createdAt: head.created_at.toISOString(),
+        occurredOn: head.occurred_on,
         transcript: head.transcript,
         templateId: head.template_id,
         templateName: head.template_name,
@@ -207,6 +219,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response, next: NextFu
         },
         patient: {
           id: head.patient_id,
+          mrn: head.mrn,
           firstName: head.first_name,
           lastName: head.last_name,
           dob: head.dob,
@@ -272,17 +285,32 @@ router.post('/', requireAuth, requireProvider, async (req: Request, res: Respons
     const { note } = body;
 
     const result = await withTransaction(async (client) => {
-      const patientId = await upsertPatient(
-        client,
-        body.patient.first,
-        body.patient.last,
-        body.patient.dob,
-      );
+      // Explicitly linked entity wins over the identity-triple upsert: the provider chose
+      // this exact patient from the autocomplete, so notes attach to the correct chart even
+      // when the typed name differs in casing or spelling.
+      let patientId: string;
+      if (body.patientId) {
+        const linked = await client.query<{ id: string }>(
+          'SELECT id FROM patients WHERE id = $1',
+          [body.patientId],
+        );
+        if (!linked.rows[0]) {
+          throw new ApiError(400, 'VALIDATION', 'The linked patient no longer exists.');
+        }
+        patientId = linked.rows[0].id;
+      } else {
+        patientId = await upsertPatient(
+          client,
+          body.patient.first,
+          body.patient.last,
+          body.patient.dob,
+        );
+      }
 
       const enc = await client.query<{ id: string }>(
-        `INSERT INTO encounters (patient_id, provider_id, template_id, transcript)
-         VALUES ($1, $2, $3, $4) RETURNING id`,
-        [patientId, user.id, body.templateId ?? null, body.transcript],
+        `INSERT INTO encounters (patient_id, provider_id, template_id, transcript, occurred_on)
+         VALUES ($1, $2, $3, $4, COALESCE($5::date, CURRENT_DATE)) RETURNING id`,
+        [patientId, user.id, body.templateId ?? null, body.transcript, body.occurredOn ?? null],
       );
       const encounterId = enc.rows[0]!.id;
 

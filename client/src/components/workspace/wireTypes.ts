@@ -25,11 +25,12 @@ export interface WireNoteVersion {
 export interface WireEncounterDetail {
   id: string;
   createdAt: string;
+  occurredOn?: string;
   transcript: string;
   templateId: string | null;
   templateName: string | null;
   provider: { id: string; fullName: string; credentials: string | null };
-  patient: { id: string; firstName: string; lastName: string; dob: string };
+  patient: { id: string; firstName: string; lastName: string; dob: string; mrn?: string };
   noteId: string;
   versions: WireNoteVersion[]; // newest first
 }
@@ -38,7 +39,8 @@ export interface WireEncounterDetail {
 export interface WireEncounterListItem {
   id: string;
   createdAt: string;
-  patient: { id: string; firstName: string; lastName: string; dob: string };
+  occurredOn?: string;
+  patient: { id: string; firstName: string; lastName: string; dob: string; mrn?: string };
   templateName: string | null;
   versionCount: number;
   latestVersion: { versionNo: number; icdCodes: IcdCode[]; createdAt: string } | null;

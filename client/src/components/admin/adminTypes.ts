@@ -9,8 +9,9 @@ import type { IcdCode, RedFlag } from '@/types';
 export interface AdminEncounterRow {
   id: string;
   createdAt: string;
+  occurredOn?: string;
   provider: { id: string; fullName: string };
-  patient: { firstName: string; lastName: string; dob: string };
+  patient: { firstName: string; lastName: string; dob: string; mrn?: string };
   templateName: string | null;
   versionCount: number;
   latestVersion: { versionNo: number; icdCodes: IcdCode[] } | null;

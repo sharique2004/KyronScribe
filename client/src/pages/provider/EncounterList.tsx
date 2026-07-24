@@ -44,7 +44,7 @@ export function EncounterList() {
       header: 'Date',
       width: '128px',
       className: 'tabular-nums text-muted',
-      render: (r) => formatDate(r.createdAt),
+      render: (r) => formatDate(r.occurredOn ?? r.createdAt),
     },
     {
       key: 'patient',

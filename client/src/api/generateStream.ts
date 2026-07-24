@@ -17,6 +17,8 @@ import type { HistoryData } from '@/components/workspace/wireTypes';
 
 export interface GenerateBody {
   patient: { first: string; last: string; dob: string };
+  /** Explicitly linked patient entity (autocomplete selection), when present. */
+  patientId?: string;
   transcript: string;
   templateId: string | null;
 }
