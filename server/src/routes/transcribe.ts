@@ -6,7 +6,7 @@
 // from the client. Mock mode returns canned dictation so the UX works keyless.
 import express, { Router, type Request, type Response, type NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
-import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import { getConfig, effectiveProvider } from '../config.js';
 import { requireAuth, requireProvider } from '../middleware/auth.js';
 import { ApiError } from '../middleware/errors.js';
@@ -26,9 +26,27 @@ const limiter = rateLimit({
 });
 
 const TRANSCRIBE_INSTRUCTION =
-  'Transcribe this clinical dictation verbatim as plain text. Use correct medical terminology and ' +
-  'sentence punctuation. Do not summarize, annotate, or add any commentary — output only the ' +
-  'transcribed speech. If the audio contains no intelligible speech, output an empty string.';
+  'Transcribe this clinical dictation verbatim. Use correct medical terminology and sentence ' +
+  'punctuation. Respond with JSON only: {"transcript": "<the spoken words, verbatim>"}. The ' +
+  'transcript field must contain ONLY the words spoken in the audio — no reasoning, no ' +
+  'restatement of these instructions, no headings, no notes, no commentary of any kind. If the ' +
+  'audio contains no intelligible speech, use an empty string.';
+
+/**
+ * Extract the transcript from the model response. The response is schema-constrained JSON
+ * ({"transcript": string}); thought parts are additionally filtered out defensively, and a
+ * tolerant fallback strips fences/labels if a model ever returns loose text anyway.
+ */
+function extractTranscript(raw: string): string {
+  const cleaned = raw.replace(/^```(?:json)?/m, '').replace(/```\s*$/m, '').trim();
+  try {
+    const j = JSON.parse(cleaned) as { transcript?: unknown };
+    if (typeof j.transcript === 'string') return j.transcript.trim();
+  } catch {
+    /* fall through to loose-text handling */
+  }
+  return cleaned;
+}
 
 const MOCK_TEXT =
   '[Dictated] Patient reports symptoms as discussed during the visit. Vitals and examination ' +
@@ -73,13 +91,29 @@ router.post(
             ],
           },
         ],
-        config: /^gemini-3/.test(cfg.scribeModel)
-          ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
-          : {},
+        config: {
+          // Schema-constrained JSON: the transcript comes back in one typed field, so model
+          // reasoning/preamble cannot leak into what the user sees in the transcript box.
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: { transcript: { type: Type.STRING } },
+            required: ['transcript'],
+          },
+          ...(/^gemini-3/.test(cfg.scribeModel)
+            ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+            : {}),
+        },
       });
 
-      const text = (result.text ?? '').trim();
-      res.json({ text });
+      // Defensive: assemble from non-thought parts rather than trusting result.text.
+      const rawText = (result.candidates?.[0]?.content?.parts ?? [])
+        .filter((p) => !p.thought && typeof p.text === 'string')
+        .map((p) => p.text as string)
+        .join('')
+        .trim() || (result.text ?? '').trim();
+
+      res.json({ text: extractTranscript(rawText) });
     } catch (err) {
       next(err);
     }
