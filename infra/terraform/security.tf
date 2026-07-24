@@ -1,7 +1,7 @@
-# security.tf — security groups (PRD §8, §9).
+# security.tf - security groups (PRD §8, §9).
 #
 # ec2 SG: 80/443 open to the world (public web app), 22 only from var.admin_cidr.
-# rds SG: 5432 ingress ONLY from the ec2 SG (source_security_group_id) — the graded
+# rds SG: 5432 ingress ONLY from the ec2 SG (source_security_group_id) - the graded
 #         SG-to-SG rule. No CIDR, no 0.0.0.0/0: the database is reachable exclusively
 #         from the app host, and nowhere else.
 
@@ -28,7 +28,7 @@ resource "aws_security_group" "ec2" {
   }
 
   ingress {
-    description = "SSH — restricted to the operator's CIDR only"
+    description = "SSH - restricted to the admin CIDR only"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -55,7 +55,7 @@ resource "aws_security_group" "rds" {
   vpc_id      = aws_vpc.main.id
 
   # THE graded SG-to-SG rule: Postgres accepts connections only from members of the
-  # EC2 security group. There is no CIDR source — a laptop with the RDS endpoint and
+  # EC2 security group. There is no CIDR source - a laptop with the RDS endpoint and
   # credentials still cannot connect, because it isn't in the ec2 SG.
   ingress {
     description     = "PostgreSQL from EC2 app host SG only"

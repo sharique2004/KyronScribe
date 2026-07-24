@@ -1,7 +1,7 @@
 # Kyron Scribe — Demo Script
 
 A timed walkthrough hitting every graded criterion. Total runtime ~12 minutes at a relaxed pace.
-Setup before recording: both servers running (`server: npm run dev`, `client: npm run dev`), DB freshly seeded, browser at `http://localhost:5173`, logged out. Mock mode is fine — the streaming path is identical; the "Mock mode" chip is honest labeling, mention it once and move on.
+Setup before recording: **use the live deployment — browser at `https://kyron.shariquekhatri.com`, logged out.** It runs live Gemini generation against the private RDS instance, so every demo below is the real production stack (and the URL bar's padlock + domain are themselves evidence for the infra criteria). Local fallback if ever needed: `server: npm run dev` + `client: npm run dev` at `http://localhost:5173` (mock mode unless keys are set).
 
 > Talking-point anchors are in **bold**. Every claim below was verified end-to-end in integration testing.
 

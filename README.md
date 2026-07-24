@@ -4,6 +4,8 @@
 
 Built for the Kyron Medical technical interview — requirements in [docs/CHALLENGE.md](docs/CHALLENGE.md), full product spec in [PRD.md](PRD.md).
 
+**Live demo: [https://kyron.shariquekhatri.com](https://kyron.shariquekhatri.com)** — AWS EC2 (nginx + Node behind a reverse proxy) with a private RDS PostgreSQL instance, secrets in AWS Secrets Manager, HTTPS via Let's Encrypt, live Gemini generation. Demo accounts below (password `KyronDemo2026!`).
+
 ---
 
 ## Feature map (challenge requirement → implementation)

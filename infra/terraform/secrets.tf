@@ -27,13 +27,16 @@ resource "aws_secretsmanager_secret" "app" {
 }
 
 # DATABASE_URL is composed from the RDS endpoint (host:port) + db name + app creds.
-# aws_db_instance.address is the hostname; .port is 5432. sslmode=require because the
-# RDS CA terminates TLS in-VPC. The password is percent-encoded so URL-structural
-# characters (# ? % & = : …) in a generated or caller-supplied password can never
-# produce a malformed URL — pg's connection-string parser decodes the userinfo.
+# aws_db_instance.address is the hostname; .port is 5432. sslmode=verify-full with the
+# AWS RDS CA bundle (installed by deploy.sh at /opt/kyron-scribe/rds-ca.pem): RDS
+# enforces TLS and its chain is signed by Amazon's RDS CA, which is not in the OS
+# trust store — node-postgres treats `require` as verify-full and rejects the chain
+# without this root. The password is percent-encoded so URL-structural characters
+# (# ? % & = : …) in a generated or caller-supplied password can never produce a
+# malformed URL — pg's connection-string parser decodes the userinfo.
 locals {
   database_url = format(
-    "postgres://%s:%s@%s:%s/%s?sslmode=require",
+    "postgres://%s:%s@%s:%s/%s?sslmode=verify-full&sslrootcert=/opt/kyron-scribe/rds-ca.pem",
     local.db_username,
     urlencode(local.db_password),
     aws_db_instance.main.address,

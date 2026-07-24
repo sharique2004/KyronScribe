@@ -64,6 +64,12 @@ rsync -az --delete \
   --rsync-path="sudo rsync" \
   "$REPO_ROOT/" "$DEPLOY_HOST:$APP_DIR/"
 
+# --- 1b. Ensure the AWS RDS CA bundle exists (DATABASE_URL uses sslmode=verify-full) ---
+# RDS enforces TLS with a chain signed by Amazon's RDS CA, which is not in the OS
+# trust store; without this bundle every pg connection fails SELF_SIGNED_CERT_IN_CHAIN.
+echo "==> Ensuring RDS CA bundle..."
+"${SSH[@]}" "[ -s $APP_DIR/rds-ca.pem ] || sudo curl -sS -o $APP_DIR/rds-ca.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem; sudo chown kyron:kyron $APP_DIR/rds-ca.pem && sudo chmod 644 $APP_DIR/rds-ca.pem"
+
 # --- 2. Optionally (re)install systemd unit + nginx config ---
 if [[ "$DO_UNIT" == "1" ]]; then
   echo "==> Installing systemd unit..."
