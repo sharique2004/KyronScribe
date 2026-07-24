@@ -1,94 +1,82 @@
-# Kyron Scribe — Demo Script
+# Kyron Scribe — Demo Script (15-minute cut)
 
-A timed walkthrough hitting every graded criterion. Total runtime ~15 minutes at a relaxed pace.
-Setup before recording: **use the live deployment — browser at `https://kyron.shariquekhatri.com`, logged out.** It runs live Gemini generation against the private RDS instance, so every demo below is the real production stack (and the URL bar's padlock + domain are themselves evidence for the infra criteria). Local fallback if ever needed: `server: npm run dev` + `client: npm run dev` at `http://localhost:5173` (mock mode unless keys are set).
-
-> Talking-point anchors are in **bold**. Every claim below was verified end-to-end in integration testing.
+One video: **behavioral first (~4 min), then the walkthrough (~11 min)**. Talking-point anchors in **bold**. Record against the live deployment: `https://kyron.shariquekhatri.com`.
 
 ---
 
-## 0:00 — Login & auth story (1 min)
+## Before recording (pre-stage, off camera — 5 minutes)
 
-1. Show the login page. Sign in as **dr.chen@kyronhealth.demo** / `KyronDemo2026!` (the demo-accounts panel is right there). First login opens the **onboarding tour** — skip it here; it gets its own segment at 11:00, and **Replay tour** in the user menu brings it back anytime.
-2. Say: **"Auth is a JWT in an httpOnly SameSite=Lax cookie — nothing token-shaped in JS-readable storage. Every request re-checks `is_active` in the DB, which is what makes instant deactivation work; you'll see that later."**
+1. **Mic permission**: do one throwaway dictation as dr.chen so the browser permission prompt never appears on camera.
+2. **Pre-stage the self-improving lesson** so it exists before you record: as dr.chen, save two encounters for **Casey Rivers, 05/05/1970** —
+   - Encounter 1 transcript: *"Low back pain after lifting boxes, worse with movement, no neuro deficits. Lumbar paraspinal tenderness."* → Generate → Save.
+   - New encounter, same patient: *"Back pain resolved. Now recurrent severe unilateral throbbing headaches with photophobia and nausea. Neuro exam nonfocal."* → Generate → Save. (The reflection runs in the background within seconds.)
+3. **Complete the onboarding tours** for dr.chen and admin (or keep them — but skipping on camera costs seconds). The signup segment shows a tour organically.
+4. **Second browser window** signed in as **admin@kyronhealth.demo**, sitting on the Providers page (for N3 + template live-effect + approvals).
+5. DevTools closed but ready (you'll open Application → Cookies once, for N2).
+6. Wi-Fi flaky? Record on a hotspot.
 
-## 1:00 — Returning-patient generation: the flagship (3 min)
+---
 
-1. In New Encounter, type **Margaret / Chen / 03-12-1955**. The **"Returning · 2 prior encounters"** badge appears with "Last seen Jun 23, 2026" — that's a live identity lookup, not client state.
-2. Keep template **General SOAP**. Paste a BP-follow-up transcript (e.g. "Margaret returns for her blood pressure follow-up. Taking lisinopril 10 mg daily. Home readings ~132/80. Denies chest pain, headache, dizziness. BP today 130/78, HR 72. Continue current regimen, recheck in 3 months with BMP.").
-3. Click **Generate note**. Narrate what's on screen, in order:
-   - status line **"Reviewing 2 prior encounters…"** — **"the model just called the `get_patient_history` tool; the server ran one indexed DB query mid-stream and returned prior notes as a tool result. History never touches the frontend prompt."**
-   - sections filling **token by token** — **"progressive SSE render, not spinner-then-dump. Live generation runs on Gemini Flash — chosen for streaming latency, native function calling, and a generous free tier — behind a provider-agnostic AI layer with Anthropic and mock as drop-in fallbacks."**
-   - after completion, the **Context used** panel lists exactly the two prior encounters the AI consulted — **"differential behavior you can see: a first-time patient shows 'generated without prior history' here instead."**
-   - the Subjective references prior diagnoses (E11.9) — history integration, clinically appropriate.
-4. **Edit inline** — click into Subjective, tweak a sentence.
-5. **ICD widget** — search "type 2 diabetes without complications" → top-8 semantic matches with scores → click **E11.9** → chip appends to Assessment. **"320 ICD-10-CM codes embedded locally with MiniLM; cosine similarity in-process; no external API, no per-keystroke cost."**
-6. **Save note** → lands on the encounter detail page.
+## 0:00 — Behavioral (camera on you, ~55 seconds each)
 
-## 4:00 — Versioning, diff, print (1.5 min)
+1. What makes you unique; what you'd bring to Kyron's culture (speed + quality + team).
+2. Outcome-oriented vs effort-oriented, and why it matters at a startup.
+3. A time you rapidly learned an unfamiliar technology under pressure — process and outcome.
+4. How you decide what to build first in a large ambiguous scope — with a real example.
 
-1. On the detail page: version rail shows **v1 · Dr. Sarah Chen · timestamp**.
-2. Click **Edit**, append a line to the Plan, **Save as new version** → v2 appears; v1 remains. **"Append-only `note_versions` table — UNIQUE(note_id, version_no), race-safe max+1. Prior versions are never updated or deleted, and it's all in Postgres."**
-3. Click **Compare** → word-level **diff view** per section, additions green. 
-4. Click **Print** → clean clinical document. (Pioneer features: diff + print + the red-flag banner you'll see next.)
+Transition line: *"Let me show you what I built."* → screen share.
 
-## 5:30 — N1: no clinical content (1 min)
+## 4:00 — Login & auth (30 s)
 
-1. Back to New Encounter. New patient (e.g. Harold / Finch / 09-30-1962), transcript: *"We chatted about the weather and her cat Whiskers. No medical topics came up at all."*
-2. Generate → **amber banner**: "No clinically meaningful content identified… The transcript was preserved — add detail and generate again." **"The model is contractually allowed to refuse: it emits `<INSUFFICIENT>` instead of hallucinating a SOAP note, and the transcript is untouched."**
+Sign in as **dr.chen@kyronhealth.demo** / `KyronDemo2026!`. While it loads: **"Auth is a JWT in an httpOnly SameSite=Lax cookie — nothing token-readable from JS. Every request re-checks `is_active` in the DB, so deactivation is instant; you'll see that live."** Point at the padlock once: **"Live on EC2 behind nginx, real Let's Encrypt cert."**
 
-## 6:30 — Red flags + N2: session expiry mid-save, zero loss (2 min)
+## 4:30 — The flagship: dictation → returning-patient generation (3 min)
 
-1. Same patient, replace the transcript with a chest-pain story: *"Crushing substernal chest pain radiating to the left arm for 45 minutes, diaphoresis, nausea. BP 158/95, HR 104."*
-2. Generate → the **"Clinical red flags detected"** banner with severity chips renders **before the note finishes streaming** — the model pre-scans and emits flags first.
-3. Now expire the session: DevTools → Application → Cookies → delete `kyron_session`. (Narrate: **"simulating a 12-hour token expiring mid-encounter."**)
-4. Click **Save note** → the **re-login modal** appears *over* the workspace: "Your unsaved note is held in this browser. After you sign in, it will be saved automatically."
-5. Re-enter the password → sign in → **the save replays automatically** and lands on the saved encounter. **"Zero data loss: the failed action sits in a retry queue, with a localStorage mirror as belt-and-suspenders."**
+1. New Encounter: **Margaret / Chen / 03-12-1955** → **"Returning · 2 prior encounters"** badge. **"Live identity lookup, not client state."**
+2. Click **Dictate** and *speak* the transcript instead of pasting: *"Margaret returns for her blood pressure follow-up. Taking lisinopril 10 milligrams daily. Home readings around 132 over 80. Denies chest pain, headache, dizziness. BP today 130 over 78, heart rate 72. Continue current regimen, recheck in 3 months with a BMP."* → Stop → text appears. **"Recorded in the browser, transcribed server-side by Gemini's multimodal input — same provider-agnostic AI layer as generation."**
+3. **Generate note.** Narrate in order:
+   - **"Reviewing 2 prior encounters…"** → **"the model called the `get_patient_history` tool; the server ran one indexed query mid-stream and returned prior notes as a tool result. History never touches the frontend prompt."**
+   - Sections filling **token by token** → **"progressive SSE render — no spinner-then-dump. Gemini Flash for first-token latency and native function calling, with Anthropic and a mock as config-swap fallbacks."**
+   - **Context used** panel lists the two consulted encounters; the note references prior diagnoses. **"A first-time patient shows 'generated without prior history' here — differential behavior you can see."**
+4. Click into a section, tweak one sentence (inline edit). ICD widget: search **"type 2 diabetes"** → click **E11.9** → chip appends. **"320 ICD-10-CM codes embedded locally with MiniLM, cosine in-process — no external API."**
+5. **Save note.**
 
-## 8:30 — Admin tour (2.5 min)
+## 7:30 — Versioning & diff (45 s)
 
-Sign out; sign in as **admin@kyronhealth.demo**.
+On the detail page: version rail (**v1 · author · time**). Edit → add a line to Plan → **Save as new version** → v2; **Compare** → word-level diff. **"Append-only `note_versions`, UNIQUE(note_id, version_no), race-safe max+1 — prior versions are never touched, all in RDS Postgres."**
 
-1. **Encounters** — all providers' encounters; filter by provider **and** date range (they compose). Click a row → **read-only** note view with a version picker and the source transcript. **"Admins see everything but clinically edit nothing."**
-2. **Providers** — click **Add provider**, create an account (password shown once). Sign out, sign in as that new provider to prove it's live, then back to admin.
-3. **N3 — deactivation with an open draft**: in one browser, sign in as **dr.patel** and start typing a draft (the "Draft saved" indicator confirms the server autosave). In another window as admin, click **Deactivate** on Dr. Patel. Back in Patel's window, the next keystroke's autosave hits the API → **calm lockout screen**: "Your account has been deactivated. Your work has been preserved." **"The per-request `is_active` check made that instant — and the draft row is still in Postgres for audit. Reactivate, and everything is back."**
-4. **Templates** — open **General SOAP**; note the helper: *"Template changes apply to every provider's next generation immediately — no refresh needed."* Edit the prompt (or name), Save.
-5. **Live-effect proof**: with a provider workspace already open in the other window (do not refresh), click **Generate** — the output reflects the updated template. **"No template caching anywhere: generation reads the template row from the DB at request time."** Also flip the template selector between the four seeded templates (Ortho / New Patient / Urgent Care) to show visibly different note structure.
-6. Optional: **draft cross-device** — with a draft open as dr.chen, open an incognito window, sign in as dr.chen → the same draft state (including a generated-but-unsaved note) is restored **from the DB**, toast: "Draft restored from your last session."
+## 8:15 — N1: no clinical content (40 s)
 
-## 11:00 — Signup, approval & onboarding (1 min)
+New Encounter, new patient (Harold / Finch / 09-30-1962), transcript: *"We chatted about the weather and her cat Whiskers. No medical topics came up."* → Generate → amber banner. **"The model is contractually allowed to refuse — `<INSUFFICIENT>` instead of a hallucinated note, transcript preserved."**
 
-1. Sign out. On the login page click **Request access** → apply as a new provider (any email) → **"Application received."**
-2. Try signing in as the applicant → the **"Application under review"** banner. **"Pending applicants can't get in — and a rejected application answers with the same generic 401 as a wrong password, so account status never leaks to probing."**
-3. Sign in as **admin** → **Providers** now leads with a **Pending applications** queue → click **Approve**. **"One click activates the account; reject is equally one click and final — both are recorded in the audit log."**
-4. Sign out, sign in as the approved provider → the **onboarding tour** walks the workspace on first login; finish it and the workspace is live. **"The tour is role-aware — admins get an oversight-focused version instead."**
-5. Retake tip: **Replay tour** in the user menu restarts it anytime — handy between demo takes.
+## 8:55 — Red flags + N2: session expiry, zero loss (90 s)
 
-## 12:00 — Voice dictation & the self-improving loop (1.5 min)
+1. Same patient, transcript: *"Crushing substernal chest pain radiating to the left arm for 45 minutes, diaphoresis, nausea. BP 158/95, HR 104."* → Generate → **red-flag chips render before the note finishes.**
+2. DevTools → Application → Cookies → delete `kyron_session`. **"A 12-hour token just expired mid-encounter."** Click **Save note** → re-login modal *over* the workspace → sign in → **save replays automatically**. **"Zero data loss — the failed action sits in a retry queue; drafts are also autosaved server-side every keystroke."**
 
-1. Back as a provider, New Encounter: click **Dictate** next to Transcript, speak two sentences of a clinical note, **Stop** → "Transcribing…" → the text appends to the transcript. **"Recording happens in the browser; transcription runs server-side through Gemini's multimodal input — same provider-agnostic AI layer, works in every browser including ones that disable the built-in speech API."**
-2. The lesson arc (patient **Casey Rivers, 05/05/1970**):
-   - Encounter 1 — transcript: *"Low back pain after lifting boxes, worse with movement, no red flags. Lumbar tenderness on exam."* Generate → Save.
-   - New encounter, same patient — transcript: *"Back pain resolved. Now recurrent severe headaches with photophobia and nausea, neuro exam nonfocal."* Generate → note the changed assessment → Save.
-   - Open that second encounter: the **Diagnostic revisions** card shows *initial dx → revised dx*, the **missed signals**, the **recommended workup**, and the stored lesson. **"On save, the system detected the diagnostic revision, had the AI reflect on both encounters, and stored the lesson — embedded with the same local vector engine as the ICD search."**
-3. Now a **brand-new patient** with a similar story: *"New patient, recurrent severe morning headaches with photophobia."* Generate → the **"Applying learned diagnostic pattern"** chip appears and the context panel lists **Learned patterns applied**; the assessment reflects it. **"That's the self-improvement: no model retraining — reflected clinical lessons accumulate in Postgres and are retrieved semantically into future prompts, so the system provably gets better with use."**
+## 10:25 — Admin: oversight, N3, live templates (1 min 45 s)
 
-## 13:30 — Infrastructure proof points (1 min, cite [DEPLOYMENT.md](DEPLOYMENT.md) §7 "The graded proofs")
+Switch to the admin window.
 
-Narrate over the terraform/nginx files or the live AWS deployment:
+1. **Encounters**: filter by provider + date range (they compose); open one **read-only**. **"Admins see everything, clinically edit nothing."**
+2. **N3**: in the provider window, sign in as **dr.patel**, type a draft ("Draft saved" appears). In the admin window **Deactivate** Dr. Patel → provider window's next autosave → **calm lockout screen, draft preserved in Postgres**. Reactivate. **"That's the per-request `is_active` check."**
+3. **Templates**: edit General SOAP's prompt, Save. In the provider window (no refresh) **Generate** → output reflects the edit. **"Zero template caching — generation reads the template row at request time."**
 
-- **RDS is private**: `nc -w2 <rds-endpoint> 5432` times out from a laptop, succeeds from the EC2 box (§7.1). Security-group ingress is **SG-to-SG** — only the EC2 SG can reach 5432.
-- **HTTPS with a real cert**: green padlock, Let's Encrypt via certbot; HTTP redirects (§7).
-- **Secrets**: single Secrets Manager secret, fetched at boot via the **instance role** — no static AWS keys, nothing in the repo; `.env` is gitignored and `.env.example` has placeholders only.
-- **Reverse proxy**: nginx serves the static client and proxies `/api`; node binds 127.0.0.1:4000 only, `proxy_buffering off` on `/api/generate` so SSE streams through.
-- **Pooling**: one `pg.Pool` (max 10) per process — no per-request connections.
+## 12:10 — Signup → approval → onboarding (60 s)
 
-## 14:30 — ERD talking points (30 s, have [ERD.md](ERD.md) open)
+Sign out → **Request access** → apply (any email) → try logging in → **"Application under review"**. **"Rejected applicants get the same generic 401 as a wrong password — status never leaks."** Admin window: **Pending applications** → **Approve** → sign in as the applicant → **role-aware onboarding tour** on first login (admins get an oversight version; **Replay tour** lives in the user menu). Stored in RDS, follows the user across devices.
 
-- **`notes` between `encounters` and `note_versions`**: a stable anchor for the version chain; the encounter stays about the visit event.
-- **`UNIQUE(note_id, version_no)`** makes concurrent saves race-safe (insert max+1, retry on conflict — covered by an integration test).
-- **Drafts are a separate mutable table** (one row per provider) so scratch state never mixes with the immutable clinical record.
-- **JSONB only on `note_versions.icd_codes` / `red_flags`** — part of the signed historical artifact — while `icd10_codes` remains the normalized search catalog with embedded vectors.
-- **Every index maps to a named query path** (provider list, admin date filter, history tool, version lookup, audit).
+## 13:10 — The self-improving loop (60 s, pre-staged)
 
-Close: `cd server && npm test` — 28 green integration tests: auth, provider isolation, append-only versioning, draft roundtrip, signup/approval lifecycle.
+1. Open Casey Rivers' second encounter → the **Diagnostic revisions** card: initial → revised dx, **missed signals**, **recommended workup**, the lesson. **"On save, the system detected the diagnostic revision and had the AI reflect on both encounters; the lesson is embedded with the same local vector engine as the ICD search."**
+2. New Encounter, brand-new patient: *"New patient with recurrent severe morning headaches with photophobia and nausea."* → Generate → **"Applying learned diagnostic pattern"** chip + **Learned patterns applied** in the context panel. **"No model retraining — reflected lessons accumulate in Postgres and are retrieved semantically into future prompts. The system provably improves with use."**
+
+## 14:10 — Infra proofs (45 s, cite [DEPLOYMENT.md](DEPLOYMENT.md) §7)
+
+- **RDS is private**: AWS console shows *Publicly accessible: No*; `nc -w2 <rds-endpoint> 5432` times out from a laptop, connects from EC2 — SG-to-SG ingress only.
+- **Secrets**: one Secrets Manager secret, fetched at boot via a scoped instance role; no `.env` on the box, nothing in the repo.
+- **Reverse proxy + pooling**: node binds 127.0.0.1:4000 only, nginx terminates TLS and disables buffering on `/api/generate`; one `pg.Pool` (max 10) per process.
+
+## 14:55 — ERD close (30 s, [ERD.md](ERD.md) open)
+
+**"`notes` anchors the version chain so `encounters` stays about the visit; UNIQUE(note_id, version_no) makes concurrent saves race-safe; drafts are a separate mutable table so scratch state never touches the immutable record; JSONB only on the signed historical artifact; every index maps to a named query path."** Close: `cd server && npm test` — **28 green integration tests**.
