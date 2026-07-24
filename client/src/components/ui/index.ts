@@ -1,0 +1,24 @@
+// Barrel export for the design-system kit (PRD §7.1).
+export { cn } from './cn';
+export { Button } from './Button';
+export type { ButtonVariant, ButtonSize } from './Button';
+export { Input, inputBase } from './Input';
+export { Select } from './Select';
+export { Textarea } from './Textarea';
+export { DateInput } from './DateInput';
+export { Card } from './Card';
+export { Badge } from './Badge';
+export type { BadgeTone } from './Badge';
+export { Table } from './Table';
+export type { Column } from './Table';
+export { Modal } from './Modal';
+export { ToastProvider, useToast } from './Toast';
+export type { ToastTone } from './Toast';
+export { Tabs } from './Tabs';
+export type { TabItem } from './Tabs';
+export { Spinner } from './Spinner';
+export { EmptyState } from './EmptyState';
+export { PageHeader } from './PageHeader';
+export { Banner } from './Banner';
+export type { BannerTone } from './Banner';
+export { SectionLabel } from './SectionLabel';

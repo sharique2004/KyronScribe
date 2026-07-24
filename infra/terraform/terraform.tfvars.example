@@ -1,0 +1,19 @@
+# terraform.tfvars.example — copy to terraform.tfvars and edit.
+# terraform.tfvars is gitignored (see infra/terraform/.gitignore) — it may hold your IP.
+
+# REQUIRED. Your workstation's public IP as a /32. Find it with:  curl -s ifconfig.me
+admin_cidr = "203.0.113.7/32"
+
+# Optional. The domain/subdomain you'll A-record to the Elastic IP for TLS.
+domain = "scribe.example.com"
+
+# Optional. Name of a pre-existing EC2 key pair for SSH. Leave unset to use SSM.
+# key_pair_name = "my-keypair"
+
+# Optional overrides (defaults shown):
+# region            = "us-east-2"
+# instance_type     = "t3.small"
+# db_instance_class = "db.t4g.micro"
+
+# db_password is intentionally omitted — a strong 32-char password is generated
+# and stored in Secrets Manager automatically. Set it only if you must supply one.

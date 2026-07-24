@@ -1,0 +1,46 @@
+# /etc/systemd/system/kyron-scribe.service
+# Kyron Scribe Node server (PRD §3, §8).
+#   Runs as the non-root `kyron` user, binds 127.0.0.1:4000 only (nginx fronts it).
+#   Secrets are NOT in this file or in any .env on the box: AWS_SECRETS_NAME tells the
+#   app to fetch DATABASE_URL / JWT_SECRET / ANTHROPIC_API_KEY from Secrets Manager at
+#   boot, using the EC2 instance role (no static AWS keys anywhere).
+
+[Unit]
+Description=Kyron Scribe API server
+Documentation=https://github.com/kyron/scribe
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kyron
+Group=kyron
+WorkingDirectory=/opt/kyron-scribe/server
+ExecStart=/usr/bin/node dist/src/index.js
+Restart=always
+RestartSec=3
+
+# Runtime environment. NOTE: only non-secret pointers live here. The secret VALUES
+# are resolved at boot from AWS Secrets Manager via the instance role.
+Environment=NODE_ENV=production
+Environment=AWS_SECRETS_NAME=kyron-scribe/prod
+Environment=AWS_REGION=us-east-2
+Environment=PORT=4000
+# Keep the MiniLM model cache inside the (writable) app tree, not the service
+# user's home, so ProtectHome=true doesn't strand it.
+Environment=TRANSFORMERS_CACHE=/opt/kyron-scribe/.cache/transformers
+
+# --- Hardening basics ---
+# ProtectSystem=full makes /usr /boot /efi /etc read-only but leaves /opt writable,
+# so the app dir and the @xenova/transformers MiniLM model cache (kept under
+# /opt/kyron-scribe, see TRANSFORMERS_CACHE below) remain readable/writable.
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

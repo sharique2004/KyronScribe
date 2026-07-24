@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-page text-ink font-sans;
+    font-size: 13.5px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Consistent, subtle focus ring across the kit — clinical, not glowing. */
+  :focus-visible {
+    outline: none;
+  }
+
+  ::selection {
+    background: rgba(29, 79, 215, 0.16);
+  }
+}
+
+@layer utilities {
+  /* Align columns of dates, DOBs, counts. */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  /* Streaming caret used by the workspace note (A7). Defined here so the
+     token/animation lives with the design system. */
+  .caret-blink::after {
+    content: '';
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    margin-left: 1px;
+    vertical-align: text-bottom;
+    background: #1d4fd7;
+    animation: kyron-caret 1s step-end infinite;
+  }
+
+  @keyframes kyron-caret {
+    50% {
+      opacity: 0;
+    }
+  }
+}
+
+/* Print stylesheet hook — A7 fills the clean clinical document; the base
+   here hides app chrome so a print of any page is not embarrassing. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #ffffff;
+  }
+}
