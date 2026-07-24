@@ -21,10 +21,18 @@ export interface GenerateBody {
   templateId: string | null;
 }
 
+/** A practice-learned diagnostic lesson applied to this generation (self-improving loop). */
+export interface LearnedLesson {
+  id: string;
+  revisedDx: string;
+  lessonSummary: string;
+}
+
 export interface GenerateCallbacks {
   onStatus?: (message: string) => void;
   onHistory?: (data: HistoryData) => void;
   onRedFlags?: (flags: RedFlag[]) => void;
+  onLearned?: (lessons: LearnedLesson[]) => void;
   onDelta?: (text: string) => void;
   onInsufficient?: (reason: string) => void;
   onComplete?: (note: NoteContent) => void;
@@ -87,6 +95,9 @@ export function startGeneration(
         break;
       case 'red_flags':
         cb.onRedFlags?.(Array.isArray(d.flags) ? (d.flags as RedFlag[]) : []);
+        break;
+      case 'learned':
+        cb.onLearned?.(Array.isArray(d.lessons) ? (d.lessons as LearnedLesson[]) : []);
         break;
       case 'delta':
         cb.onDelta?.(str(d.text));

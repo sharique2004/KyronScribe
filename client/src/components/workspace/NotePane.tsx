@@ -14,6 +14,7 @@ import { CodeChips } from './CodeChips';
 import type { SoapKey } from './streamParser';
 import type { HistoryData } from './wireTypes';
 import type { NoteContent, RedFlag } from '@/types';
+import type { LearnedLesson } from '@/api/generateStream';
 
 export type NotePhase = 'idle' | 'streaming' | 'complete' | 'insufficient' | 'error';
 
@@ -43,6 +44,8 @@ interface NotePaneProps {
   canSave: boolean;
   /** Show the P3 context panel — only meaningful after a live generation. */
   showContext: boolean;
+  /** Practice-learned lessons applied to this generation (self-improving loop). */
+  learned: LearnedLesson[];
 }
 
 const noteIcon = (
@@ -70,6 +73,7 @@ export function NotePane(props: NotePaneProps) {
     saving,
     canSave,
     showContext,
+    learned,
   } = props;
 
   // --- Idle: nothing generated yet. ---
@@ -131,13 +135,21 @@ export function NotePane(props: NotePaneProps) {
         )
       }
     >
-      {/* Status line + red flags appear during streaming, above the sections. */}
-      {(streaming || redFlags.length > 0) && (
+      {/* Status line + learned-pattern chip + red flags appear during streaming, above the sections. */}
+      {(streaming || redFlags.length > 0 || learned.length > 0) && (
         <div className="space-y-2.5 border-b border-line px-4 py-3">
           {streaming && statusMessage && (
             <div className="flex items-center gap-2 text-meta text-muted">
               <Spinner size={13} />
               <span>{statusMessage}</span>
+            </div>
+          )}
+          {learned.length > 0 && (
+            <div className="flex items-center gap-1.5 text-meta font-medium text-primary">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                <path d="M6 0l1.6 4.4L12 6 7.6 7.6 6 12 4.4 7.6 0 6l4.4-1.6L6 0z" />
+              </svg>
+              Applying {learned.length} learned diagnostic pattern{learned.length > 1 ? 's' : ''}
             </div>
           )}
           {redFlags.length > 0 && <RedFlagChips flags={redFlags} />}
@@ -191,7 +203,9 @@ export function NotePane(props: NotePaneProps) {
           />
 
           <div className="space-y-3 border-t border-line px-4 py-3">
-            {showContext && <ContextPanel history={history} received={historyReceived} />}
+            {showContext && (
+              <ContextPanel history={history} received={historyReceived} learned={learned} />
+            )}
             <div className="flex items-center justify-end gap-2">
               <Button variant="ghost" onClick={onDiscard} disabled={saving}>
                 Discard

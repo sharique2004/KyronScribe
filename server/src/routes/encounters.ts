@@ -7,6 +7,7 @@ import { query, withTransaction } from '../db.js';
 import { requireAuth, requireProvider } from '../middleware/auth.js';
 import { ApiError } from '../middleware/errors.js';
 import { audit } from '../services/audit.js';
+import { maybeReflect } from '../services/lessons.js';
 import type { AuthedRequest, IcdCodeRef, RedFlag } from '../types.js';
 
 const router = Router();
@@ -314,6 +315,15 @@ router.post('/', requireAuth, requireProvider, async (req: Request, res: Respons
 
     audit(user.id, 'note.save', 'encounter', result.encounterId, { versionNo: 1 });
     res.status(201).json({ ...result, versionNo: 1 });
+
+    // Self-improving loop: after the save commits, check (async, never blocking the
+    // response) whether this encounter revises the patient's prior diagnosis; if so,
+    // reflect on both encounters and store a retrievable clinical lesson.
+    setImmediate(() => {
+      void maybeReflect(result.encounterId).catch((err) =>
+        console.warn('[lessons] reflection skipped:', err),
+      );
+    });
   } catch (err) {
     next(err);
   }

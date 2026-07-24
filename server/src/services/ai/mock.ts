@@ -205,9 +205,18 @@ function synthesizeNote(opts: GenerationOpts, history: HistoryEntry[]): string {
       ? ' Comprehensive assessment with broadened differential per new-patient evaluation.'
       : '';
 
+  // Self-improving loop: weave retrieved practice lessons into the differential so the
+  // demo visibly changes once a diagnostic-revision lesson exists (mirrors the live prompt).
+  const learned = opts.learnedMeta ?? [];
+  const learnedLine = learned.length
+    ? ` Per practice-learned diagnostic pattern${learned.length > 1 ? 's' : ''}, also consider: ${learned
+        .map((l) => l.revisedDx)
+        .join('; ')} — discriminating features reviewed.`
+    : '';
+
   const assessment = `Clinical impression based on the presentation${
     codes.length ? `: ${codes.map((c, i) => `${i + 1}. ${c.description} (${c.code})`).join('; ')}` : ''
-  }.${styleNote}`;
+  }.${learnedLine}${styleNote}`;
 
   const followUp = history.length > 0 ? 'Continue established management; ' : '';
   const returnPrec = /urgent/i.test(tname) ? 'Return precautions reviewed. ' : '';

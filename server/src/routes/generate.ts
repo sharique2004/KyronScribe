@@ -13,6 +13,7 @@ import type { AuthedRequest } from '../types.js';
 import { runGeneration, type GenerationOpts, type ScribeEvent } from '../services/ai/scribe.js';
 import { runGeminiGeneration } from '../services/ai/gemini.js';
 import { runMockGeneration } from '../services/ai/mock.js';
+import { getRelevantLessons, buildLessonsSection } from '../services/lessons.js';
 
 const router = Router();
 
@@ -80,6 +81,10 @@ router.post(
       provider = effectiveProvider(cfg);
       mock = provider === 'mock';
 
+      // Self-improving loop: semantically match this transcript against stored diagnostic
+      // lessons; strong matches are injected into the system prompt (and surfaced to the UI).
+      const learnedHits = await getRelevantLessons(body.transcript);
+
       opts = {
         patient: body.patient,
         transcript: body.transcript,
@@ -89,6 +94,12 @@ router.post(
         patientId,
         todayIso: new Date().toISOString().slice(0, 10),
         signal: new AbortController().signal, // replaced below with the request-tied controller
+        learnedSection: buildLessonsSection(learnedHits),
+        learnedMeta: learnedHits.map((h) => ({
+          id: h.id,
+          revisedDx: h.revisedDx,
+          lessonSummary: h.lessonSummary,
+        })),
       };
     } catch (err) {
       next(err);
@@ -124,6 +135,11 @@ router.post(
     });
 
     audit(user.id, 'generate', 'patient', patientId, { patientId, templateId, mock, provider });
+
+    // Surface applied lessons to the UI before content streams (transparency, P3-adjacent).
+    if (opts.learnedMeta && opts.learnedMeta.length > 0) {
+      emit('learned', { lessons: opts.learnedMeta });
+    }
 
     try {
       if (mock) {

@@ -5,13 +5,16 @@ import { SectionLabel } from '@/components/ui/SectionLabel';
 import { Badge } from '@/components/ui/Badge';
 import { formatDate } from './format';
 import type { HistoryData } from './wireTypes';
+import type { LearnedLesson } from '@/api/generateStream';
 
 interface ContextPanelProps {
   history: HistoryData | null;
   received: boolean;
+  /** Practice-learned lessons injected into this generation (self-improving loop). */
+  learned?: LearnedLesson[];
 }
 
-export function ContextPanel({ history, received }: ContextPanelProps) {
+export function ContextPanel({ history, received, learned = [] }: ContextPanelProps) {
   const hasHistory = received && history != null && history.count > 0;
 
   return (
@@ -55,6 +58,20 @@ export function ContextPanel({ history, received }: ContextPanelProps) {
         <p className="mt-1.5 text-meta text-muted">
           First-time patient — generated without prior history.
         </p>
+      )}
+
+      {learned.length > 0 && (
+        <div className="mt-3 border-t border-line pt-2.5">
+          <SectionLabel>Learned patterns applied</SectionLabel>
+          <ul className="mt-1.5 space-y-1.5">
+            {learned.map((l) => (
+              <li key={l.id} className="text-meta">
+                <span className="font-medium text-ink">{l.revisedDx}</span>
+                <span className="text-muted"> — {l.lessonSummary}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

@@ -68,6 +68,7 @@ export async function runGeminiGeneration(opts: GenerationOpts, emit: Emit): Pro
     patient: opts.patient,
     todayIso: opts.todayIso,
     isReturning: opts.isReturning,
+    learnedSection: opts.learnedSection ?? null,
   });
 
   const contents: Content[] = [

@@ -22,6 +22,7 @@ import { CodeChips } from '@/components/workspace/CodeChips';
 import { IcdSearch } from '@/components/workspace/IcdSearch';
 import { SectionDiff } from '@/components/workspace/SectionDiff';
 import { RedFlagChips } from '@/components/workspace/RedFlagChips';
+import { LessonsPanel } from '@/components/workspace/LessonsPanel';
 import { formatDate, formatDateTime, formatDob } from '@/components/workspace/format';
 import type { WireEncounterDetail, WireNoteVersion } from '@/components/workspace/wireTypes';
 import type { IcdCode } from '@/types';
@@ -365,6 +366,9 @@ export function EncounterDetail() {
                 </Card>
               </>
             )}
+
+            {/* Self-improving loop: diagnostic-revision lessons for this patient (omitted when none). */}
+            <LessonsPanel patientId={p.id} />
           </div>
 
           {/* Version rail */}

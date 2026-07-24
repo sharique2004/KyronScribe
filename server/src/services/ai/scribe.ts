@@ -18,6 +18,10 @@ export interface GenerationOpts {
   patientId: string | null;
   todayIso: string;
   signal: AbortSignal;
+  /** Preformatted "practice-learned diagnostic patterns" prompt section, when lessons matched. */
+  learnedSection?: string | null;
+  /** The matched lessons (for the `learned` SSE event and mock weaving). */
+  learnedMeta?: { id: string; revisedDx: string; lessonSummary: string }[];
 }
 
 /** SSE event names emitted upstream to the route's write helper (PRD §6.3). */
@@ -26,6 +30,7 @@ export type ScribeEvent =
   | 'red_flags'
   | 'delta'
   | 'history'
+  | 'learned'
   | 'insufficient'
   | 'complete'
   | 'error'
@@ -150,6 +155,7 @@ export async function runGeneration(opts: GenerationOpts, emit: Emit): Promise<v
     patient: opts.patient,
     todayIso: opts.todayIso,
     isReturning: opts.isReturning,
+    learnedSection: opts.learnedSection ?? null,
   });
 
   const messages: Anthropic.MessageParam[] = [

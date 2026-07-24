@@ -23,7 +23,8 @@ import type { SoapKey } from '@/components/workspace/streamParser';
 import { relativeSince } from '@/components/workspace/format';
 import type { HistoryData } from '@/components/workspace/wireTypes';
 import { startGeneration } from '@/api/generateStream';
-import type { GenerationHandle } from '@/api/generateStream';
+import type { GenerationHandle, LearnedLesson } from '@/api/generateStream';
+import { VoiceDictation } from '@/components/workspace/VoiceDictation';
 import { useDraftAutosave } from '@/hooks/useDraftAutosave';
 import type { Draft, IcdCode, NoteContent, RedFlag, Template } from '@/types';
 
@@ -57,6 +58,7 @@ export function Workspace() {
   const [redFlags, setRedFlags] = useState<RedFlag[]>([]);
   const [history, setHistory] = useState<HistoryData | null>(null);
   const [historyReceived, setHistoryReceived] = useState(false);
+  const [learned, setLearned] = useState<LearnedLesson[]>([]);
   const [rawDelta, setRawDelta] = useState('');
   const [note, setNote] = useState<NoteContent>(EMPTY_NOTE);
   const [insufficientReason, setInsufficientReason] = useState<string | null>(null);
@@ -145,6 +147,7 @@ export function Workspace() {
     setRedFlags([]);
     setHistory(null);
     setHistoryReceived(false);
+    setLearned([]);
     setRawDelta('');
     setNote(EMPTY_NOTE);
     setInsufficientReason(null);
@@ -159,6 +162,7 @@ export function Workspace() {
           setHistory(h);
           setHistoryReceived(true);
         },
+        onLearned: (lessons) => setLearned(lessons),
         onRedFlags: (flags) => setRedFlags(flags),
         onDelta: (text) => setRawDelta((prev) => prev + text),
         onInsufficient: (reason) => {
@@ -321,14 +325,22 @@ export function Workspace() {
               </div>
 
               <div className="space-y-1">
-                <SectionLabel>Transcript</SectionLabel>
+                <div className="flex items-center justify-between">
+                  <SectionLabel>Transcript</SectionLabel>
+                  <VoiceDictation
+                    disabled={streaming}
+                    onText={(text) =>
+                      setTranscript((prev) => (prev.trim() ? `${prev.trimEnd()}\n\n${text}` : text))
+                    }
+                  />
+                </div>
                 <Textarea
                   mono
                   rows={14}
                   value={transcript}
                   onChange={(e) => setTranscript(e.target.value)}
                   disabled={streaming}
-                  placeholder="Paste the raw encounter transcript or type freeform observations…"
+                  placeholder="Paste the raw encounter transcript, type freeform observations, or dictate…"
                   className="resize-y"
                 />
               </div>
@@ -365,6 +377,7 @@ export function Workspace() {
             saving={saving}
             canSave={canSave}
             showContext={showContext}
+            learned={learned}
           />
 
           <Card title="ICD-10 search" description="Semantic search · click a result to add it to the Assessment">

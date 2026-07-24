@@ -156,3 +156,20 @@ export interface ApiErrorBody {
     message: string;
   };
 }
+
+/**
+ * A diagnostic-revision lesson (self-improving loop): recorded when a patient's primary
+ * diagnosis materially changed between encounters, retrieved semantically into future
+ * generations, and surfaced on the patient's chart.
+ */
+export interface Lesson {
+  id: string;
+  initialDx: string;
+  revisedDx: string;
+  missedSignals: string;
+  recommendedWorkup: string;
+  lessonSummary: string;
+  fromEncounterId: string;
+  toEncounterId: string;
+  createdAt: string;
+}

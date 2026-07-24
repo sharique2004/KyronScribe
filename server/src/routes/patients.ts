@@ -4,8 +4,12 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import { z } from 'zod';
 import { query } from '../db.js';
 import { requireAuth, requireProvider } from '../middleware/auth.js';
+import { ApiError } from '../middleware/errors.js';
+import { listLessons } from '../services/lessons.js';
 
 const router = Router();
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const lookupSchema = z.object({
   first: z.string().trim().min(1),
@@ -55,6 +59,24 @@ router.get(
         encounterCount: row.encounter_count,
         ...(row.last_seen ? { lastSeen: row.last_seen.toISOString() } : {}),
       });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// GET /api/patients/:patientId/lessons — the patient's diagnostic-revision lessons
+// (self-improving loop). Like history, lessons are patient-level clinical record:
+// readable by any authenticated provider or admin.
+router.get(
+  '/:patientId/lessons',
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const patientId = req.params.patientId ?? '';
+      if (!UUID_RE.test(patientId)) throw new ApiError(404, 'NOT_FOUND', 'Patient not found.');
+      const lessons = await listLessons(patientId);
+      res.json({ lessons });
     } catch (err) {
       next(err);
     }

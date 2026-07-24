@@ -1,6 +1,6 @@
 # Kyron Scribe — Demo Script
 
-A timed walkthrough hitting every graded criterion. Total runtime ~13 minutes at a relaxed pace.
+A timed walkthrough hitting every graded criterion. Total runtime ~15 minutes at a relaxed pace.
 Setup before recording: **use the live deployment — browser at `https://kyron.shariquekhatri.com`, logged out.** It runs live Gemini generation against the private RDS instance, so every demo below is the real production stack (and the URL bar's padlock + domain are themselves evidence for the infra criteria). Local fallback if ever needed: `server: npm run dev` + `client: npm run dev` at `http://localhost:5173` (mock mode unless keys are set).
 
 > Talking-point anchors are in **bold**. Every claim below was verified end-to-end in integration testing.
@@ -64,7 +64,16 @@ Sign out; sign in as **admin@kyronhealth.demo**.
 4. Sign out, sign in as the approved provider → the **onboarding tour** walks the workspace on first login; finish it and the workspace is live. **"The tour is role-aware — admins get an oversight-focused version instead."**
 5. Retake tip: **Replay tour** in the user menu restarts it anytime — handy between demo takes.
 
-## 12:00 — Infrastructure proof points (1 min, cite [DEPLOYMENT.md](DEPLOYMENT.md) §7 "The graded proofs")
+## 12:00 — Voice dictation & the self-improving loop (1.5 min)
+
+1. Back as a provider, New Encounter: click **Dictate** next to Transcript, speak two sentences of a clinical note, **Stop** → "Transcribing…" → the text appends to the transcript. **"Recording happens in the browser; transcription runs server-side through Gemini's multimodal input — same provider-agnostic AI layer, works in every browser including ones that disable the built-in speech API."**
+2. The lesson arc (patient **Casey Rivers, 05/05/1970**):
+   - Encounter 1 — transcript: *"Low back pain after lifting boxes, worse with movement, no red flags. Lumbar tenderness on exam."* Generate → Save.
+   - New encounter, same patient — transcript: *"Back pain resolved. Now recurrent severe headaches with photophobia and nausea, neuro exam nonfocal."* Generate → note the changed assessment → Save.
+   - Open that second encounter: the **Diagnostic revisions** card shows *initial dx → revised dx*, the **missed signals**, the **recommended workup**, and the stored lesson. **"On save, the system detected the diagnostic revision, had the AI reflect on both encounters, and stored the lesson — embedded with the same local vector engine as the ICD search."**
+3. Now a **brand-new patient** with a similar story: *"New patient, recurrent severe morning headaches with photophobia."* Generate → the **"Applying learned diagnostic pattern"** chip appears and the context panel lists **Learned patterns applied**; the assessment reflects it. **"That's the self-improvement: no model retraining — reflected clinical lessons accumulate in Postgres and are retrieved semantically into future prompts, so the system provably gets better with use."**
+
+## 13:30 — Infrastructure proof points (1 min, cite [DEPLOYMENT.md](DEPLOYMENT.md) §7 "The graded proofs")
 
 Narrate over the terraform/nginx files or the live AWS deployment:
 
@@ -74,7 +83,7 @@ Narrate over the terraform/nginx files or the live AWS deployment:
 - **Reverse proxy**: nginx serves the static client and proxies `/api`; node binds 127.0.0.1:4000 only, `proxy_buffering off` on `/api/generate` so SSE streams through.
 - **Pooling**: one `pg.Pool` (max 10) per process — no per-request connections.
 
-## 13:00 — ERD talking points (30 s, have [ERD.md](ERD.md) open)
+## 14:30 — ERD talking points (30 s, have [ERD.md](ERD.md) open)
 
 - **`notes` between `encounters` and `note_versions`**: a stable anchor for the version chain; the encounter stays about the visit event.
 - **`UNIQUE(note_id, version_no)`** makes concurrent saves race-safe (insert max+1, retry on conflict — covered by an integration test).

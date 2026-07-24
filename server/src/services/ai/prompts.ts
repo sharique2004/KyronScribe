@@ -14,6 +14,11 @@ export interface BuildPromptOpts {
   todayIso: string;
   /** True when a patient record with this identity already exists (has prior encounters). */
   isReturning: boolean;
+  /**
+   * Preformatted "PRACTICE-LEARNED DIAGNOSTIC PATTERNS" section (self-improving lesson loop),
+   * or null when no stored lesson semantically matches this transcript.
+   */
+  learnedSection?: string | null;
 }
 
 /**
@@ -89,7 +94,7 @@ const FIRST_VISIT_GUIDANCE = `HISTORY INTEGRATION (first visit):
 
 /** Assemble the full system prompt for a generation request. */
 export function buildSystemPrompt(opts: BuildPromptOpts): string {
-  const { templatePrompt, patient, todayIso, isReturning } = opts;
+  const { templatePrompt, patient, todayIso, isReturning, learnedSection } = opts;
 
   const banner = `PATIENT: ${patient.first} ${patient.last} · DOB ${patient.dob} · Encounter date ${todayIso}`;
 
@@ -99,5 +104,8 @@ export function buildSystemPrompt(opts: BuildPromptOpts): string {
 
   const historySection = isReturning ? HISTORY_GUIDANCE : FIRST_VISIT_GUIDANCE;
 
-  return `${BASE_RULES}\n\n${historySection}\n\n${templateSection}\n\n${banner}`;
+  const sections = [BASE_RULES, historySection];
+  if (learnedSection && learnedSection.trim()) sections.push(learnedSection.trim());
+  sections.push(templateSection, banner);
+  return sections.join('\n\n');
 }

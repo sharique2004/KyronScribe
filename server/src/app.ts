@@ -13,6 +13,7 @@ import draftsRoutes from './routes/drafts.js';
 import icdRoutes from './routes/icd.js';
 import generateRoutes from './routes/generate.js';
 import adminRoutes from './routes/admin.js';
+import transcribeRoutes from './routes/transcribe.js';
 
 import { notFound, errorHandler } from './middleware/errors.js';
 
@@ -40,6 +41,8 @@ export function createApp(): express.Express {
   app.use('/api/admin', adminRoutes); // A4
   app.use('/api/icd', icdRoutes); // A5
   app.use('/api/generate', generateRoutes); // A5
+  // Voice dictation (raw audio body — its own express.raw parser lives inside the router):
+  app.use('/api/transcribe', transcribeRoutes);
 
   app.use(notFound);
   app.use(errorHandler);
