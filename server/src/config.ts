@@ -18,6 +18,8 @@ export interface AppConfig {
   scribeModel: string;
   scribeMock: boolean;
   nodeEnv: string;
+  /** Verified SES sender ("Name <addr>"). When unset, signup/approval emails are skipped. */
+  sesFrom?: string;
 }
 
 /**
@@ -106,6 +108,7 @@ export async function loadConfig(): Promise<AppConfig> {
       source.SCRIBE_MODEL || (aiProvider === 'gemini' ? 'gemini-3.6-flash' : 'claude-sonnet-5'),
     scribeMock: toBool(source.SCRIBE_MOCK),
     nodeEnv: source.NODE_ENV || 'development',
+    sesFrom: source.SES_FROM || undefined,
   };
   return cached;
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
 import { ApiError } from '@/api/client';
 import { Button } from '@/components/ui/Button';
@@ -23,22 +23,30 @@ export function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showDemo, setShowDemo] = useState(true);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setPending(null);
     setSubmitting(true);
     try {
       const user = await login(email, password);
       navigate(user.role === 'admin' ? '/admin' : '/', { replace: true });
     } catch (err) {
-      setError(
-        err instanceof ApiError && err.status !== 500 && err.status !== 0
-          ? 'Incorrect email or password.'
-          : 'Unable to sign in right now. Please try again.',
-      );
+      // A pending applicant is a distinct, non-error state — surface it calmly
+      // rather than as a wrong-credentials failure.
+      if (err instanceof ApiError && err.code === ('PENDING_APPROVAL' as ApiError['code'])) {
+        setPending(err.message || 'Your application is awaiting administrator review.');
+      } else {
+        setError(
+          err instanceof ApiError && err.status !== 500 && err.status !== 0
+            ? 'Incorrect email or password.'
+            : 'Unable to sign in right now. Please try again.',
+        );
+      }
       setSubmitting(false);
     }
   }
@@ -47,6 +55,7 @@ export function Login() {
     setEmail(accountEmail);
     setPassword(DEMO_PASSWORD);
     setError(null);
+    setPending(null);
   }
 
   return (
@@ -92,6 +101,11 @@ export function Login() {
                 invalid={error != null}
               />
             </div>
+            {pending && (
+              <Banner tone="info" title="Application under review">
+                {pending}
+              </Banner>
+            )}
             {error && <Banner tone="critical">{error}</Banner>}
             <Button
               type="submit"
@@ -103,6 +117,13 @@ export function Login() {
             </Button>
           </form>
         </div>
+
+        <p className="mt-4 text-center text-meta text-muted">
+          New provider?{' '}
+          <Link to="/signup" className="font-medium text-primary hover:underline">
+            Request access
+          </Link>
+        </p>
 
         <div className="mt-4 rounded border border-line bg-surface shadow-card">
           <button

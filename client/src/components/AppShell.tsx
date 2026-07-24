@@ -5,6 +5,7 @@ import { useAuth } from '@/auth/AuthContext';
 import { api } from '@/api/client';
 import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/components/ui/cn';
+import { OnboardingTour } from '@/components/onboarding/OnboardingTour';
 
 interface NavItem {
   to: string;
@@ -76,9 +77,10 @@ function Wordmark() {
 }
 
 function UserMenu() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshMe } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [replaying, setReplaying] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -115,6 +117,28 @@ function UserMenu() {
             <div className="truncate text-body font-medium text-ink">{user.fullName}</div>
             <div className="truncate text-meta text-muted">{user.email}</div>
           </div>
+          <button
+            onClick={async () => {
+              setReplaying(true);
+              try {
+                await api.post('/auth/onboarding-reset');
+                await refreshMe();
+              } catch {
+                /* best-effort; if it fails the menu simply stays put */
+              } finally {
+                setReplaying(false);
+                setOpen(false);
+              }
+            }}
+            disabled={replaying}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-body text-ink hover:bg-page disabled:opacity-50"
+          >
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" className="text-muted">
+              <path d="M4 10a6 6 0 1 1 1.8 4.3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <path d="M4 6.5V10h3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Replay tour
+          </button>
           <button
             onClick={async () => {
               setOpen(false);
@@ -201,6 +225,8 @@ export function AppShell() {
           </div>
         </main>
       </div>
+
+      <OnboardingTour />
     </div>
   );
 }

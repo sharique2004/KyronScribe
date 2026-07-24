@@ -8,7 +8,8 @@ import { query } from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { ApiError } from '../middleware/errors.js';
 import { audit } from '../services/audit.js';
-import type { AuthedRequest, IcdCodeRef } from '../types.js';
+import { sendApproved } from '../services/email.js';
+import type { ApprovalStatus, AuthedRequest, IcdCodeRef } from '../types.js';
 
 const router = Router();
 
@@ -121,6 +122,7 @@ interface ProviderRow {
   full_name: string;
   credentials: string | null;
   is_active: boolean;
+  approval_status: ApprovalStatus;
   created_at: Date;
   deactivated_at: Date | null;
   encounter_count: number;
@@ -133,6 +135,7 @@ function toProvider(r: ProviderRow) {
     fullName: r.full_name,
     credentials: r.credentials,
     isActive: r.is_active,
+    approvalStatus: r.approval_status,
     createdAt: r.created_at.toISOString(),
     deactivatedAt: r.deactivated_at ? r.deactivated_at.toISOString() : null,
     encounterCount: r.encounter_count,
@@ -140,15 +143,18 @@ function toProvider(r: ProviderRow) {
 }
 
 const PROVIDER_SELECT = `
-  SELECT u.id, u.email, u.full_name, u.credentials, u.is_active, u.created_at, u.deactivated_at,
+  SELECT u.id, u.email, u.full_name, u.credentials, u.is_active, u.approval_status,
+         u.created_at, u.deactivated_at,
          (SELECT count(*)::int FROM encounters e WHERE e.provider_id = u.id) AS encounter_count
   FROM users u`;
 
-// GET /api/admin/providers — roster with encounter counts.
+// GET /api/admin/providers — roster with encounter counts. Pending applicants surface
+// first (they need action), then alphabetical.
 router.get('/providers', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const { rows } = await query<ProviderRow>(
-      `${PROVIDER_SELECT} WHERE u.role = 'provider' ORDER BY u.full_name`,
+      `${PROVIDER_SELECT} WHERE u.role = 'provider'
+       ORDER BY (u.approval_status = 'pending') DESC, u.full_name`,
     );
     res.json({ providers: rows.map(toProvider) });
   } catch (err) {
@@ -193,37 +199,63 @@ router.post('/providers', async (req: Request, res: Response, next: NextFunction
   }
 });
 
-const patchProviderSchema = z.object({ isActive: z.boolean() });
+// Either flip activation OR advance the approval lifecycle — never both in one call.
+const patchProviderSchema = z.union([
+  z.object({ isActive: z.boolean() }),
+  z.object({ approvalStatus: z.enum(['approved', 'rejected']) }),
+]);
 
-// PATCH /api/admin/providers/:id — activate/deactivate. Cannot target admins or self.
+// PATCH /api/admin/providers/:id — activate/deactivate, or approve/reject a pending
+// applicant. Cannot target admins or self.
 router.patch('/providers/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const admin = (req as AuthedRequest).user;
     const id = req.params.id ?? '';
     if (!UUID_RE.test(id)) throw new ApiError(404, 'NOT_FOUND', 'Provider not found');
-    const { isActive } = patchProviderSchema.parse(req.body);
+    const body = patchProviderSchema.parse(req.body);
 
     if (id === admin.id) {
-      throw new ApiError(403, 'FORBIDDEN', 'You cannot change your own active status');
+      throw new ApiError(403, 'FORBIDDEN', 'You cannot change your own account');
     }
 
-    const target = await query<{ role: string }>('SELECT role FROM users WHERE id = $1', [id]);
+    const target = await query<{ role: string; full_name: string; email: string }>(
+      'SELECT role, full_name, email FROM users WHERE id = $1',
+      [id],
+    );
     const targetRow = target.rows[0];
     if (!targetRow) throw new ApiError(404, 'NOT_FOUND', 'Provider not found');
     if (targetRow.role === 'admin') {
       throw new ApiError(403, 'FORBIDDEN', 'Admin accounts cannot be modified');
     }
 
-    await query(
-      `UPDATE users
-       SET is_active = $2,
-           deactivated_at = CASE WHEN $2 THEN NULL ELSE now() END
-       WHERE id = $1`,
-      [id, isActive],
-    );
+    if ('approvalStatus' in body) {
+      // Approve ⇒ activate + clear deactivation; reject ⇒ deactivate. Both stamp the status.
+      const approved = body.approvalStatus === 'approved';
+      await query(
+        `UPDATE users
+         SET approval_status = $2,
+             is_active = $3,
+             deactivated_at = CASE WHEN $3 THEN NULL ELSE deactivated_at END
+         WHERE id = $1`,
+        [id, body.approvalStatus, approved],
+      );
+      audit(admin.id, approved ? 'provider.approve' : 'provider.reject', 'user', id, {});
+      if (approved) {
+        // Best-effort; never blocks or fails the response.
+        void sendApproved(targetRow.email, targetRow.full_name);
+      }
+    } else {
+      await query(
+        `UPDATE users
+         SET is_active = $2,
+             deactivated_at = CASE WHEN $2 THEN NULL ELSE now() END
+         WHERE id = $1`,
+        [id, body.isActive],
+      );
+      audit(admin.id, body.isActive ? 'provider.reactivate' : 'provider.deactivate', 'user', id, {});
+    }
 
     const { rows } = await query<ProviderRow>(`${PROVIDER_SELECT} WHERE u.id = $1`, [id]);
-    audit(admin.id, isActive ? 'provider.reactivate' : 'provider.deactivate', 'user', id, {});
     res.json({ provider: toProvider(rows[0]!) });
   } catch (err) {
     next(err);

@@ -29,6 +29,7 @@ Built for the Kyron Medical technical interview — requirements in [docs/CHALLE
 | Drafts restored after refresh, across devices, from the DB | Debounced (800 ms) server-side autosave to a per-provider `drafts` row + localStorage mirror | Done |
 | Non-happy paths (two demonstrated, three implemented) | N1 insufficient content · N2 session expiry mid-save · N3 deactivation with open draft — see below | Done |
 | AWS EC2 + nginx + HTTPS, private RDS, Secrets Manager, pooling | Terraform in `infra/terraform/`, runbook in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Ready to apply |
+| Self-serve signup → admin approval → onboarding (beyond spec) | `/signup` files a pending application; admin approves/rejects from the roster (audited); first login gets a role-aware product tour — `server/src/routes/auth.ts`, `client/src/pages/Signup.tsx`, `components/onboarding/` | Done |
 
 ### Pioneer features
 
@@ -37,6 +38,7 @@ Built for the Kyron Medical technical interview — requirements in [docs/CHALLE
 - **Context transparency panel** — after generation, shows exactly which prior encounters the AI consulted, or "First-time patient — generated without prior history."
 - **Print-ready export** — a dedicated print stylesheet renders a clean clinical document (browser print → PDF).
 - **Mock scribe mode** — `SCRIBE_MOCK=1` streams a realistic, template-aware, transcript-aware generation through the real SSE path (tool-call simulation included), so the full UX works with no API key. The UI shows a "Mock mode" chip.
+- **Signup & onboarding** — self-serve "Request access" applications land in an admin approval queue (approve activates instantly; reject answers login probes with the same generic 401 as a wrong password, so status never leaks). First login opens a role-aware onboarding tour — provider and admin get different steps — with **Replay tour** in the user menu. Optional SES emails on signup and approval when `SES_FROM` is set.
 
 ---
 
@@ -118,6 +120,7 @@ Seeded returning patient: **Margaret Chen, DOB 1955-03-12** — two completed pr
 | `AI_PROVIDER` | no (auto) | Force `gemini` \| `anthropic` \| `mock`; default prefers gemini, then anthropic, then mock based on which keys exist |
 | `SCRIBE_MODEL` | no (per provider) | Generation model — defaults `gemini-3.6-flash` (gemini) / `claude-sonnet-5` (anthropic) |
 | `SCRIBE_MOCK` | no | `1` forces mock streaming (auto-on when no API key) |
+| `SES_FROM` | no | From address (e.g. `Kyron Scribe <no-reply@domain>`) — enables best-effort SES email notifications (us-east-2) on signup and approval; unset = silently skipped |
 | `AWS_SECRETS_NAME` | prod only | Secrets Manager secret; values override env at boot |
 
 **Mock vs. real AI:** with no API key (or `SCRIBE_MOCK=1`) the server streams a realistic canned generation through the *same* SSE path — template-aware, transcript-aware, red flags, simulated history tool call, `<INSUFFICIENT>` behavior. Set `GEMINI_API_KEY` (or `ANTHROPIC_API_KEY`) and `SCRIBE_MOCK=0` (or remove it) to switch to live generation; nothing else changes. The AI layer is provider-agnostic: Gemini Flash is the default (streaming latency, native function calling, generous free tier), with Anthropic and mock as drop-in fallbacks — all three emit the identical SSE event contract.
@@ -139,7 +142,7 @@ All three are scripted with exact steps in [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIP
 Focused integration tests (vitest + supertest) run the real Express app against the local DB — no server process needed — using a throwaway namespace that cleans up after itself:
 
 ```bash
-cd server && npm test    # auth · RBAC isolation · append-only versioning · draft roundtrip
+cd server && npm test    # auth · RBAC isolation · append-only versioning · draft roundtrip · signup/approval lifecycle
 ```
 
 ---

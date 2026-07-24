@@ -12,12 +12,21 @@ import type { SafeUser } from '@/types';
 import { ReLoginModal } from './ReLoginModal';
 import { DeactivatedScreen } from './DeactivatedScreen';
 
+/**
+ * The client-side user is the frozen SafeUser (A3) plus the onboarding flag the
+ * Wave-2 wire contract adds to GET /auth/me and /auth/login. It's kept here
+ * (rather than in the frozen '@/types') so the shared type stays untouched.
+ */
+export type AppUser = SafeUser & { onboarded?: boolean };
+
 interface AuthContextValue {
-  user: SafeUser | null;
+  user: AppUser | null;
   /** True until the initial GET /auth/me resolves. */
   booting: boolean;
-  login: (email: string, password: string) => Promise<SafeUser>;
+  login: (email: string, password: string) => Promise<AppUser>;
   logout: () => Promise<void>;
+  /** Re-fetch GET /auth/me and refresh `user` (e.g. after onboarding-complete/reset). */
+  refreshMe: () => Promise<void>;
   /**
    * Run an API action such that, if it fails with SESSION_EXPIRED, the action is
    * queued and transparently re-run after the user re-authenticates — the original
@@ -36,7 +45,7 @@ interface QueuedAction {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<SafeUser | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [booting, setBooting] = useState(true);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [deactivated, setDeactivated] = useState(false);
@@ -48,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     api
-      .get<{ user: SafeUser }>('/auth/me')
+      .get<{ user: AppUser }>('/auth/me')
       .then((res) => {
         if (!cancelled) setUser(res.user);
       })
@@ -96,9 +105,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const refreshMe = useCallback(async () => {
+    const res = await api.get<{ user: AppUser }>('/auth/me');
+    setUser(res.user);
+  }, []);
+
   const login = useCallback(
-    async (email: string, password: string): Promise<SafeUser> => {
-      const res = await api.post<{ user: SafeUser }>('/auth/login', {
+    async (email: string, password: string): Promise<AppUser> => {
+      const res = await api.post<{ user: AppUser }>('/auth/login', {
         email: email.trim().toLowerCase(),
         password,
       });
@@ -155,6 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     booting,
     login,
     logout,
+    refreshMe,
     runWithAuthRetry,
   };
 

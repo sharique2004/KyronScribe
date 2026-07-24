@@ -4,6 +4,9 @@ import type { Request } from 'express';
 
 export type UserRole = 'provider' | 'admin';
 
+/** Applicant lifecycle (migration 002). Legacy/seeded rows are 'approved'. */
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+
 /** Full user record as stored, including the bcrypt hash. Never serialized to a client. */
 export interface User {
   id: string;
@@ -13,6 +16,8 @@ export interface User {
   credentials: string | null;
   role: UserRole;
   isActive: boolean;
+  approvalStatus: ApprovalStatus;
+  onboardedAt: string | null;
   createdAt: string;
   deactivatedAt: string | null;
 }
@@ -25,6 +30,8 @@ export interface SafeUser {
   credentials: string | null;
   role: UserRole;
   isActive: boolean;
+  /** True once the guided tour has been completed (onboarded_at IS NOT NULL). */
+  onboarded: boolean;
 }
 
 export interface Patient {
@@ -133,6 +140,7 @@ export interface AuthedRequest extends Request {
 export type ErrorCode =
   | 'SESSION_EXPIRED'
   | 'ACCOUNT_DEACTIVATED'
+  | 'PENDING_APPROVAL'
   | 'FORBIDDEN'
   | 'NOT_FOUND'
   | 'VALIDATION'

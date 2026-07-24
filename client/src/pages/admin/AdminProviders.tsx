@@ -13,6 +13,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { AddProviderModal } from '@/components/admin/AddProviderModal';
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog';
+import { PendingApplications } from '@/components/admin/PendingApplications';
 import { apiPatch } from '@/components/admin/adminApi';
 import type {
   AdminProviderRow,
@@ -29,6 +30,7 @@ export function AdminProviders() {
   const [error, setError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [target, setTarget] = useState<AdminProviderRow | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<AdminProviderRow | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -76,6 +78,42 @@ export function AdminProviders() {
     [toast],
   );
 
+  const decide = useCallback(
+    async (row: AdminProviderRow, approvalStatus: 'approved' | 'rejected') => {
+      setBusyId(row.id);
+      try {
+        const res = await apiPatch<AdminProviderMutationResponse>(
+          `/admin/providers/${row.id}`,
+          { approvalStatus },
+        );
+        setProviders((prev) => prev.map((p) => (p.id === row.id ? res.provider : p)));
+        toast.success(
+          approvalStatus === 'approved'
+            ? `${row.fullName} approved.`
+            : `${row.fullName}'s application was rejected.`,
+        );
+      } catch (err) {
+        toast.error(err instanceof ApiError ? err.message : 'Update failed.');
+      } finally {
+        setBusyId(null);
+        setRejectTarget(null);
+      }
+    },
+    [toast],
+  );
+
+  // Applications awaiting review float above the roster; everything else (approved
+  // or rejected) stays in the main table. Seeded rows without approvalStatus are
+  // treated as established roster members.
+  const pending = useMemo(
+    () => providers.filter((p) => p.approvalStatus === 'pending'),
+    [providers],
+  );
+  const roster = useMemo(
+    () => providers.filter((p) => p.approvalStatus !== 'pending'),
+    [providers],
+  );
+
   const columns = useMemo<Column<AdminProviderRow>[]>(
     () => [
       {
@@ -102,7 +140,11 @@ export function AdminProviders() {
         header: 'Status',
         width: '130px',
         render: (r) =>
-          r.isActive ? (
+          r.approvalStatus === 'rejected' ? (
+            <Badge tone="neutral" title="Application was rejected">
+              Rejected
+            </Badge>
+          ) : r.isActive ? (
             <Badge tone="success" dot>
               Active
             </Badge>
@@ -131,7 +173,7 @@ export function AdminProviders() {
         align: 'right',
         width: '120px',
         render: (r) => {
-          if (isAdminRow(r)) return null;
+          if (isAdminRow(r) || r.approvalStatus === 'rejected') return null;
           return r.isActive ? (
             <Button
               variant="danger"
@@ -171,10 +213,17 @@ export function AdminProviders() {
         </Banner>
       )}
 
+      <PendingApplications
+        rows={pending}
+        busyId={busyId}
+        onApprove={(r) => decide(r, 'approved')}
+        onReject={(r) => setRejectTarget(r)}
+      />
+
       <Card flush>
         <Table
           columns={columns}
-          rows={providers}
+          rows={roster}
           rowKey={(r) => r.id}
           empty={
             loading ? (
@@ -207,6 +256,19 @@ export function AdminProviders() {
         onConfirm={() => target && setActive(target, false)}
       >
         They will be signed out on their next request; any open draft is preserved.
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={rejectTarget != null}
+        tone="danger"
+        title={rejectTarget ? `Reject ${rejectTarget.fullName}?` : 'Reject application?'}
+        confirmLabel="Reject application"
+        loading={busyId === rejectTarget?.id}
+        onCancel={() => setRejectTarget(null)}
+        onConfirm={() => rejectTarget && decide(rejectTarget, 'rejected')}
+      >
+        Rejection is final — the applicant will not be granted access and this
+        decision is recorded in the audit log. They would need to apply again.
       </ConfirmDialog>
     </div>
   );

@@ -25,6 +25,8 @@ export interface AdminEncountersResponse {
  * is read defensively so admin rows can be badged and shielded from the
  * deactivate control when the backend does include it.
  */
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+
 export interface AdminProviderRow {
   id: string;
   email: string;
@@ -35,6 +37,11 @@ export interface AdminProviderRow {
   deactivatedAt: string | null;
   encounterCount: number;
   role?: 'provider' | 'admin';
+  /**
+   * Wave-2 wire contract: signup lifecycle. Existing seeded rows may omit it
+   * (treated as already-approved roster members), so it's optional.
+   */
+  approvalStatus?: ApprovalStatus;
 }
 
 export interface AdminProvidersResponse {

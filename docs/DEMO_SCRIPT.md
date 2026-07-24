@@ -1,6 +1,6 @@
 # Kyron Scribe — Demo Script
 
-A timed walkthrough hitting every graded criterion. Total runtime ~12 minutes at a relaxed pace.
+A timed walkthrough hitting every graded criterion. Total runtime ~13 minutes at a relaxed pace.
 Setup before recording: **use the live deployment — browser at `https://kyron.shariquekhatri.com`, logged out.** It runs live Gemini generation against the private RDS instance, so every demo below is the real production stack (and the URL bar's padlock + domain are themselves evidence for the infra criteria). Local fallback if ever needed: `server: npm run dev` + `client: npm run dev` at `http://localhost:5173` (mock mode unless keys are set).
 
 > Talking-point anchors are in **bold**. Every claim below was verified end-to-end in integration testing.
@@ -9,7 +9,7 @@ Setup before recording: **use the live deployment — browser at `https://kyron.
 
 ## 0:00 — Login & auth story (1 min)
 
-1. Show the login page. Sign in as **dr.chen@kyronhealth.demo** / `KyronDemo2026!` (the demo-accounts panel is right there).
+1. Show the login page. Sign in as **dr.chen@kyronhealth.demo** / `KyronDemo2026!` (the demo-accounts panel is right there). First login opens the **onboarding tour** — skip it here; it gets its own segment at 11:00, and **Replay tour** in the user menu brings it back anytime.
 2. Say: **"Auth is a JWT in an httpOnly SameSite=Lax cookie — nothing token-shaped in JS-readable storage. Every request re-checks `is_active` in the DB, which is what makes instant deactivation work; you'll see that later."**
 
 ## 1:00 — Returning-patient generation: the flagship (3 min)
@@ -56,7 +56,15 @@ Sign out; sign in as **admin@kyronhealth.demo**.
 5. **Live-effect proof**: with a provider workspace already open in the other window (do not refresh), click **Generate** — the output reflects the updated template. **"No template caching anywhere: generation reads the template row from the DB at request time."** Also flip the template selector between the four seeded templates (Ortho / New Patient / Urgent Care) to show visibly different note structure.
 6. Optional: **draft cross-device** — with a draft open as dr.chen, open an incognito window, sign in as dr.chen → the same draft state (including a generated-but-unsaved note) is restored **from the DB**, toast: "Draft restored from your last session."
 
-## 11:00 — Infrastructure proof points (1 min, cite [DEPLOYMENT.md](DEPLOYMENT.md) §7 "The graded proofs")
+## 11:00 — Signup, approval & onboarding (1 min)
+
+1. Sign out. On the login page click **Request access** → apply as a new provider (any email) → **"Application received."**
+2. Try signing in as the applicant → the **"Application under review"** banner. **"Pending applicants can't get in — and a rejected application answers with the same generic 401 as a wrong password, so account status never leaks to probing."**
+3. Sign in as **admin** → **Providers** now leads with a **Pending applications** queue → click **Approve**. **"One click activates the account; reject is equally one click and final — both are recorded in the audit log."**
+4. Sign out, sign in as the approved provider → the **onboarding tour** walks the workspace on first login; finish it and the workspace is live. **"The tour is role-aware — admins get an oversight-focused version instead."**
+5. Retake tip: **Replay tour** in the user menu restarts it anytime — handy between demo takes.
+
+## 12:00 — Infrastructure proof points (1 min, cite [DEPLOYMENT.md](DEPLOYMENT.md) §7 "The graded proofs")
 
 Narrate over the terraform/nginx files or the live AWS deployment:
 
@@ -66,7 +74,7 @@ Narrate over the terraform/nginx files or the live AWS deployment:
 - **Reverse proxy**: nginx serves the static client and proxies `/api`; node binds 127.0.0.1:4000 only, `proxy_buffering off` on `/api/generate` so SSE streams through.
 - **Pooling**: one `pg.Pool` (max 10) per process — no per-request connections.
 
-## 12:00 — ERD talking points (30 s, have [ERD.md](ERD.md) open)
+## 13:00 — ERD talking points (30 s, have [ERD.md](ERD.md) open)
 
 - **`notes` between `encounters` and `note_versions`**: a stable anchor for the version chain; the encounter stays about the visit event.
 - **`UNIQUE(note_id, version_no)`** makes concurrent saves race-safe (insert max+1, retry on conflict — covered by an integration test).
@@ -74,4 +82,4 @@ Narrate over the terraform/nginx files or the live AWS deployment:
 - **JSONB only on `note_versions.icd_codes` / `red_flags`** — part of the signed historical artifact — while `icd10_codes` remains the normalized search catalog with embedded vectors.
 - **Every index maps to a named query path** (provider list, admin date filter, history tool, version lookup, audit).
 
-Close: `cd server && npm test` — 23 green integration tests: auth, provider isolation, append-only versioning, draft roundtrip.
+Close: `cd server && npm test` — 28 green integration tests: auth, provider isolation, append-only versioning, draft roundtrip, signup/approval lifecycle.

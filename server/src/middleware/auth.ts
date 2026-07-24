@@ -20,6 +20,7 @@ interface UserRow {
   credentials: string | null;
   role: UserRole;
   is_active: boolean;
+  onboarded_at: Date | null;
 }
 
 function toSafeUser(row: UserRow): SafeUser {
@@ -30,6 +31,7 @@ function toSafeUser(row: UserRow): SafeUser {
     credentials: row.credentials,
     role: row.role,
     isActive: row.is_active,
+    onboarded: row.onboarded_at !== null,
   };
 }
 
@@ -53,7 +55,7 @@ export async function requireAuth(
     }
 
     const { rows } = await query<UserRow>(
-      'SELECT id, email, full_name, credentials, role, is_active FROM users WHERE id = $1',
+      'SELECT id, email, full_name, credentials, role, is_active, onboarded_at FROM users WHERE id = $1',
       [claims.sub],
     );
     const row = rows[0];
